@@ -1,0 +1,9 @@
+[启动检查] 上传目录已存在：C:\Users\mjj\SmartEdu-Platform\smartedu-backend\uploads\avatars
+[启动检查] 目录写入权限：? 正常
+Exception in thread "main" java.lang.NoClassDefFoundError: org/springframework/boot/SpringApplication
+	at com.smartedu.SmartEduApplication.main(SmartEduApplication.java:23)
+Caused by: java.lang.ClassNotFoundException: org.springframework.boot.SpringApplication
+	at java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(Unknown Source)
+	at java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(Unknown Source)
+	at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+	... 1 more

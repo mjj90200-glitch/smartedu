@@ -1,0 +1,128 @@
+# ============================================================
+# SmartEdu-Platform 智慧教育平台 - 后端配置文件
+# ============================================================
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: SmartEdu-Platform
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      # 最大文件大小
+      max-file-size: 50MB
+      # 最大请求大小
+      max-request-size: 50MB
+      # 文件大小阈值，超过此值会写入临时文件
+      file-size-threshold: 2MB
+
+  # MySQL 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/smartedu_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: your_password
+
+  # Jackson 配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+  # 静态资源配置
+  web:
+    resources:
+      static-locations: classpath:/static/,file:uploads/
+
+# 文件上传目录
+file:
+  upload-dir: uploads
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  # Mapper XML 文件位置
+  mapper-locations: classpath:/mapper/**/*.xml
+  # 实体类包路径
+  type-aliases-package: com.smartedu.entity
+  configuration:
+    # 驼峰命名转换
+    map-underscore-to-camel-case: true
+    # 打印 SQL 日志
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      # 主键策略：自增
+      id-type: auto
+      # 逻辑删除配置
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Spring Security 配置
+security:
+  jwt:
+    # JWT 密钥
+    secret: SmartEduPlatformSecretKey2024VeryLongSecretKeyForJwtToken
+    # 令牌过期时间（毫秒）：7 天
+    expiration: 604800000
+    # Token 前缀
+    token-prefix: "Bearer "
+    # 不需要认证的接口
+    ignore-urls:
+      - /auth/login
+      - /auth/register
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /h2-console/**
+      - /uploads/**
+
+# Swagger / OpenAPI 配置
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.smartedu: DEBUG
+    com.smartedu.mapper: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+
+# ============================================================
+# 新闻 API 配置
+# ============================================================
+news:
+  api:
+    # 使用 IT 之家 RSS 订阅（完全免费，无需 API key）
+    # IT 之家科技新闻：https://www.ithome.com/rss/
+    # 国内访问速度快，内容涵盖科技、数码、互联网等领域
+    url: https://www.ithome.com/rss/
+    # 轮播图数量：每次抓取前 3 条作为轮播图
+    carousel-count: 3
+  schedule:
+    cron: "0 0 2 * * ?"
+
+# ============================================================
+# 阿里云百炼 AI 配置（Coding Plan）
+# ============================================================
+ai:
+  bailian:
+    # API Key（从阿里云百炼控制台获取）
+    api-key: sk-sp-6a4265766e014f378cb68088d4541e87
+    # 模型名称（Coding Plan 支持的模型）
+    model: qwen3.5-plus
+    # OpenAI 兼容端点（Coding Plan 专用）- 完整的 chat/completions 路径
+    endpoint: https://coding.dashscope.aliyuncs.com/v1
