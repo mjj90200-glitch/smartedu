@@ -24,9 +24,9 @@ spring:
   # MySQL 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/smartedu_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: your_password
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/smartedu_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:your_password}
 
   # Jackson 配置
   jackson:
@@ -91,6 +91,19 @@ springdoc:
     enabled: true
     tags-sorter: alpha
     operations-sorter: alpha
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    db:
+      enabled: true
 
 # 日志配置
 logging:

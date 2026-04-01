@@ -10,8 +10,9 @@ export interface ApiResponse<T = any> {
 }
 
 // 创建 axios 实例
+// 使用环境变量配置 API 基础路径，默认为 /api（适用于 Docker 部署）
 const service: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json;charset=UTF-8'

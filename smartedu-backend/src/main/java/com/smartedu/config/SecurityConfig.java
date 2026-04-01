@@ -89,6 +89,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // ========== 放行静态资源和 API 文档 ==========
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                // ========== 放行 Actuator 健康检查端点 ==========
+                .requestMatchers("/actuator/**").permitAll()
                 // ========== 放行认证相关接口 ==========
                 .requestMatchers("/auth/**", "/user/register", "/user/login").permitAll()
                 // ========== 放行 H2 控制台（开发用）==========

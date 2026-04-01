@@ -34,6 +34,25 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    // 生产环境构建配置
+    outDir: 'dist',
+    assetsDir: 'static',
+    // 生成源码映射便于调试
+    sourcemap: false,
+    // 代码分割
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'element-plus': ['element-plus'],
+          'vue-vendor': ['vue', 'vue-router', 'pinia'],
+          'utils': ['axios', 'dayjs', 'lodash-es']
+        }
+      }
+    },
+    //  chunk 大小警告限制
+    chunkSizeWarningLimit: 2000
+  },
   css: {
     preprocessorOptions: {
       scss: {
