@@ -10,6 +10,22 @@ server:
 spring:
   application:
     name: SmartEdu-Platform
+  main:
+    allow-bean-definition-overriding: true
+    lazy-initialization: true
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:sk-sp-6a4265766e014f378cb68088d4541e87}
+      base-url: ${AI_BASE_URL:https://coding.dashscope.aliyuncs.com}
+      chat:
+        options:
+          model: ${AI_MODEL:qwen3.5-plus}
+          temperature: 0.7
+      # 禁用不需要的功能
+      audio:
+        enabled: false
+      embedding:
+        enabled: false
 
   # 文件上传配置
   servlet:

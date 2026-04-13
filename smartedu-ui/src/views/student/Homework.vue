@@ -235,7 +235,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Download, View, MagicStick, Lock, InfoFilled } from '@element-plus/icons-vue'
-import { get, post } from '@/utils/request'
+import { get, postFile } from '@/utils/request'
 
 // 数据
 const loading = ref(false)
@@ -362,12 +362,7 @@ const handleSubmit = async () => {
       formData.append('content', submitForm.content)
     }
 
-    const response = await fetch('/api/student/homework/submit', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: formData
-    })
-    const res = await response.json()
+    const res = await postFile('/student/homework/submit', formData)
 
     if (res.code === 200) {
       ElMessage.success('🎉 提交成功！正在加载 AI 思路点拨...')

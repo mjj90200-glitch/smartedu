@@ -4,6 +4,7 @@ import com.smartedu.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -15,12 +16,22 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Spring Security 配置类
@@ -31,6 +42,8 @@ import java.util.List;
  * 3. 配置 CORS 跨域
  * 4. 支持方法级权限控制（@PreAuthorize）
  * 5. 集成 JWT 认证过滤器
+ * 6. 支持 ASYNC 分派（流式响应需要）
+ * 7. SecurityContext 线程继承（异步线程池需要）
  * </p>
  *
  * @author SmartEdu Team
@@ -40,10 +53,38 @@ import java.util.List;
 @EnableMethodSecurity(prePostEnabled = true)  // 开启方法级安全控制，支持 @PreAuthorize 注解
 public class SecurityConfig {
 
+    // 静态初始化：设置 SecurityContext 策略为可继承线程本地
+    // 这使得主线程的 SecurityContext 能自动传递给异步线程（如 boundedElastic 线程池）
+    static {
+        SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
+    }
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
+
+    /**
+     * 自定义 AccessDeniedHandler - 处理流式响应中的权限错误
+     * 当响应已提交时，避免抛出异常导致 Servlet 错误
+     */
+    @Bean
+    public AccessDeniedHandler customAccessDeniedHandler() {
+        return new AccessDeniedHandler() {
+            @Override
+            public void handle(HttpServletRequest request, HttpServletResponse response,
+                    AccessDeniedException accessDeniedException) throws IOException, ServletException {
+                // 如果响应已提交，不再处理
+                if (response.isCommitted()) {
+                    return;
+                }
+                // 设置错误响应
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.getWriter().write("{\"code\":403,\"message\":\"权限不足\"}");
+            }
+        };
     }
 
     /**
@@ -85,6 +126,9 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             // 配置授权规则
             .authorizeHttpRequests(auth -> auth
+                // ========== 关键：允许 ASYNC 分派（流式响应需要）==========
+                // Spring Security 需要信任由已授权请求发起的内部异步分派
+                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                 // ========== 放行 OPTIONS 预检请求（CORS 需要）==========
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // ========== 放行静态资源和 API 文档 ==========
@@ -112,11 +156,17 @@ public class SecurityConfig {
                 .requestMatchers("/home-recommend/list").permitAll()
                 // ========== 放行开发测试接口（生产环境应删除）==========
                 .requestMatchers("/news/manual-update-dev").permitAll()
+                // ========== AI Agent 接口：需要认证（所有登录用户）==========
+                .requestMatchers("/ai/**").authenticated()
                 // ========== 作业模块：需要 TEACHER/STUDENT/ADMIN 角色 ==========
                 // 使用 hasAuthority 匹配完整的 authority（包括 ROLE_ 前缀）
                 .requestMatchers("/homework/**").hasAnyAuthority("ROLE_TEACHER", "ROLE_STUDENT", "ROLE_ADMIN")
                 // ========== 其他请求需要认证 ==========
                 .anyRequest().authenticated()
+            )
+            // 配置异常处理 - 处理流式响应中的权限错误
+            .exceptionHandling(exceptions -> exceptions
+                .accessDeniedHandler(customAccessDeniedHandler())
             )
             // 添加 JWT 过滤器
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

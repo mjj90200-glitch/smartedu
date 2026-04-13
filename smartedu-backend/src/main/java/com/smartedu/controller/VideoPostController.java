@@ -154,7 +154,8 @@ public class VideoPostController {
     private Long getCurrentUserId() {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth instanceof JwtAuthenticationToken jwtAuth) {
+            if (auth instanceof JwtAuthenticationToken) {
+                JwtAuthenticationToken jwtAuth = (JwtAuthenticationToken) auth;
                 return jwtAuth.getUserId();
             }
         } catch (Exception ignored) {
@@ -168,7 +169,8 @@ public class VideoPostController {
      */
     private Long getRequiredUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth instanceof JwtAuthenticationToken jwtAuth) {
+        if (auth instanceof JwtAuthenticationToken) {
+            JwtAuthenticationToken jwtAuth = (JwtAuthenticationToken) auth;
             return jwtAuth.getUserId();
         }
         throw new RuntimeException("用户未登录");

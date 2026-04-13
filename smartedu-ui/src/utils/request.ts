@@ -104,4 +104,13 @@ export function del<T = any>(url: string, params?: any): Promise<ApiResponse<T>>
   return service.delete(url, { params })
 }
 
+// 文件上传专用方法（使用 FormData）
+export function postFile<T = any>(url: string, formData: FormData): Promise<ApiResponse<T>> {
+  return service.post(url, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
 export default service

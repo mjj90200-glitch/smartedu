@@ -1,5 +1,8 @@
 <template>
   <el-container class="layout-container">
+    <!-- AI 聊天助手 -->
+    <AIChatAssistant />
+
     <!-- 侧边栏 -->
     <el-aside :width="asideWidth">
       <div class="logo-container">
@@ -107,6 +110,7 @@ import { useUserStore } from '@/store/modules/user'
 import { useAppStore } from '@/store/modules/app'
 import { Fold, Expand, User, SwitchButton, House } from '@element-plus/icons-vue'
 import { logout } from '@/api/auth'
+import AIChatAssistant from '@/components/ai/AIChatAssistant.vue'
 
 const router = useRouter()
 const route = useRoute()

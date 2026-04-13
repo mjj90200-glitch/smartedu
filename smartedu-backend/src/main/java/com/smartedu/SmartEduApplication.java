@@ -3,8 +3,10 @@ package com.smartedu;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.File;
 
@@ -12,15 +14,21 @@ import java.io.File;
  * SmartEdu-Platform 智慧教育平台 - 启动类
  * @author SmartEdu Team
  */
-@SpringBootApplication
+@SpringBootApplication(excludeName = {
+    "org.springframework.ai.autoconfigure.retry.SpringAiRetryAutoConfiguration"
+})
 @MapperScan("com.smartedu.mapper")
 @EnableAsync  // 开启异步任务支持
 @EnableScheduling  // 开启定时任务支持
+@EnableRetry  // 开启重试支持
 public class SmartEduApplication {
 
 
 
     public static void main(String[] args) {
+        // 配置 SecurityContextHolder 使用 InheritableThreadLocal
+        // 这样子线程（如 Reactor boundedElastic）可以继承主线程的认证信息
+        SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
         // 检查并创建上传目录
         checkAndCreateUploadDir();
 

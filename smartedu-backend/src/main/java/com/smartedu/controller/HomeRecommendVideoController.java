@@ -135,7 +135,8 @@ public class HomeRecommendVideoController {
     private Long getCurrentUserId() {
         try {
             var auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth instanceof JwtAuthenticationToken jwtAuth) {
+            if (auth instanceof JwtAuthenticationToken) {
+                JwtAuthenticationToken jwtAuth = (JwtAuthenticationToken) auth;
                 return jwtAuth.getUserId();
             }
         } catch (Exception ignored) {

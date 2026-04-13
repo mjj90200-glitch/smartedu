@@ -6,7 +6,25 @@
       "Bash(powershell.exe -Command \"cd C:/Users/mjj/SmartEdu-Platform/smartedu-backend; if \\(Test-Path 'pom.xml'\\) { 'pom.xml exists' } else { 'pom.xml not found' }\")",
       "Bash(curl:*)",
       "Bash(npm run:*)",
-      "Bash(\"C:/Users/mjj/.cursor/extensions/redhat.java-1.53.0-win32-x64/jre/21.0.10-win32-x86_64/bin/java.exe\" -version 2>&1)"
+      "Bash(\"C:/Users/mjj/.cursor/extensions/redhat.java-1.53.0-win32-x64/jre/21.0.10-win32-x86_64/bin/java.exe\" -version 2>&1)",
+      "Bash(which mvn:*)",
+      "Bash(cmd //c \"mvn --version\")",
+      "Bash(cmd //c \"d:\\\\maven 安装\\\\apache-maven-3.9.10\\\\bin\\\\mvn --version\")",
+      "Read(//d/maven 安装/apache-maven-3.9.10/**)",
+      "Bash(powershell -Command \"Get-Process | Where-Object {$_.Path -like '*java*'} | Stop-Process -Force\" 2>&1 || echo \"No java processes found\")",
+      "Bash(./build.bat 2>&1 | tail -25)",
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(tail:*)",
+      "Bash(where java:*)",
+      "Read(//c/Program Files/Java/**)",
+      "Read(//c/Program Files/**)",
+      "Bash(ls:*)",
+      "Bash(tasklist:*)",
+      "Bash(wmic process:*)",
+      "Bash(powershell -Command \"Get-Process -Id 19432 | Select-Object Name,Path,StartTime\" 2>/dev/null)",
+      "Bash(dir:*)",
+      "Bash(export:*)"
     ]
   }
 }

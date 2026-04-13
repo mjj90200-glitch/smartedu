@@ -185,6 +185,16 @@ public class TeacherHomeworkController {
         }
     }
 
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除作业", description = "删除作业及其关联的提交记录")
+    public Result<Void> deleteHomework(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long teacherId = getUserId(userDetails);
+        homeworkService.deleteHomework(id, teacherId);
+        return Result.success("删除成功");
+    }
+
     private Long getUserId(UserDetails userDetails) {
         if (userDetails == null) {
             throw new RuntimeException("未登录");
