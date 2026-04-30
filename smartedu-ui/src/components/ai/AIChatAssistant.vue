@@ -1,9 +1,9 @@
 <template>
-  <div class="ai-chat-assistant">
+  <div :class="['ai-chat-assistant', { embedded }]">
     <!-- 悬浮按钮 -->
     <transition name="fade">
       <div
-        v-if="!isChatOpen"
+        v-if="!embedded && !isStandaloneRoute && !isChatOpen"
         class="chat-float-btn"
         @click="toggleChat"
       >
@@ -17,7 +17,7 @@
 
     <!-- 聊天窗口 -->
     <transition name="slide">
-      <div v-if="isChatOpen" class="chat-window">
+      <div v-if="embedded || (!isStandaloneRoute && isChatOpen)" class="chat-window">
         <!-- 头部 -->
         <div class="chat-header">
           <div class="header-left">
@@ -31,10 +31,10 @@
             <el-button text @click="clearHistory" title="清除历史">
               <el-icon><Delete /></el-icon>
             </el-button>
-            <el-button text @click="toggleChat" title="最小化">
+            <el-button v-if="!embedded" text @click="toggleChat" title="最小化">
               <el-icon><Minus /></el-icon>
             </el-button>
-            <el-button text @click="isChatOpen = false" title="关闭">
+            <el-button v-if="!embedded" text @click="isChatOpen = false" title="关闭">
               <el-icon><Close /></el-icon>
             </el-button>
           </div>
@@ -172,6 +172,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, h } from 'vue'
+import { useRoute } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
 import { useAiChatStore } from '@/stores/aiChat'
 import {
@@ -204,6 +205,12 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-light.css'
 import { ElMessage } from 'element-plus'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false
+})
+
 // 自定义 AI 图标
 const SmartEduIcon = {
   name: 'SmartEduIcon',
@@ -215,6 +222,7 @@ const SmartEduIcon = {
 }
 
 // Store
+const route = useRoute()
 const userStore = useUserStore()
 const aiChatStore = useAiChatStore()
 
@@ -251,6 +259,10 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const canSend = computed(() => {
   return (inputMessage.value.trim() || selectedFile.value) && !aiChatStore.isStreaming
 })
+
+const embedded = computed(() => props.embedded)
+
+const isStandaloneRoute = computed(() => route.path === '/student/assistant' || route.path === '/teacher/assistant')
 
 const statusText = computed(() => {
   switch (aiChatStore.agentStatus) {
@@ -369,13 +381,13 @@ const sendMessage = async () => {
   // 创建新的 AbortController
   abortController.value = new AbortController()
 
+  // 准备历史
+  const history = aiChatStore.getConversationHistory()
+
   // 添加用户消息
   if (message) {
     aiChatStore.addUserMessage(message)
   }
-
-  // 准备历史
-  const history = aiChatStore.getConversationHistory()
 
   // 添加 AI 占位消息
   aiChatStore.addAiMessage('')
@@ -390,7 +402,6 @@ const sendMessage = async () => {
         selectedFile.value,
         history,
         (chunk) => {
-          aiChatStore.setAgentStatus(AgentStatus.CALLING_TOOL)
           aiChatStore.updateStreamingContent(chunk)
         },
         abortController.value.signal
@@ -401,7 +412,6 @@ const sendMessage = async () => {
         message,
         history,
         (chunk) => {
-          aiChatStore.setAgentStatus(AgentStatus.CALLING_TOOL)
           aiChatStore.updateStreamingContent(chunk)
         },
         abortController.value.signal
@@ -494,40 +504,105 @@ const clearHistory = () => {
   right: 24px;
   z-index: 9999;
 
+  &.embedded {
+    position: static;
+    inset: auto;
+    width: 100%;
+
+    .chat-window {
+      width: 100%;
+      height: min(78vh, 920px);
+      min-height: 720px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      overflow: hidden;
+      animation: fadeIn 0.8s ease-in-out;
+    }
+
+    .chat-header {
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+
+      .header-left {
+        gap: 12px;
+
+        .ai-icon {
+          font-size: 30px;
+          animation: pulse 2s infinite;
+        }
+
+        .header-text {
+          .title {
+            font-size: 18px;
+            font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          }
+
+          .subtitle {
+            font-size: 13px;
+            opacity: 0.9;
+          }
+        }
+      }
+    }
+
+    .chat-messages {
+      padding: 22px;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+
+    .chat-input {
+      padding: 16px 18px 18px;
+      background: #fff;
+      border-top: 1px solid #e5e7eb;
+    }
+  }
+
   .chat-float-btn {
     cursor: pointer;
-    transition: transform 0.3s;
+    transition: transform 0.3s, box-shadow 0.3s;
 
     &:hover {
       transform: scale(1.1);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
   }
 
   .chat-window {
-    width: 400px;
-    height: 600px;
+    width: 420px;
+    height: 650px;
     background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+    border-radius: 20px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: all 0.3s ease;
+
+    &:hover {
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    }
 
     .chat-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px;
+      padding: 14px 18px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 
       .header-left {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 12px;
 
         .ai-icon {
-          font-size: 28px;
+          font-size: 30px;
+          animation: pulse 2s infinite;
         }
 
         .header-text {
@@ -535,26 +610,29 @@ const clearHistory = () => {
           flex-direction: column;
 
           .title {
-            font-size: 16px;
+            font-size: 17px;
             font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
           }
 
           .subtitle {
             font-size: 12px;
-            opacity: 0.8;
+            opacity: 0.9;
           }
         }
       }
 
       .header-right {
         display: flex;
-        gap: 4px;
+        gap: 6px;
 
         .el-button {
           color: #fff;
+          transition: all 0.3s ease;
 
           &:hover {
             background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
           }
         }
       }
@@ -563,9 +641,26 @@ const clearHistory = () => {
     .chat-messages {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
-      background: #f5f7fa;
+      padding: 18px;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
       position: relative;
+
+      &::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 10px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: rgba(102, 126, 234, 0.5);
+        border-radius: 10px;
+        &:hover {
+          background: rgba(102, 126, 234, 0.8);
+        }
+      }
 
       .welcome-message {
         display: flex;
@@ -575,6 +670,7 @@ const clearHistory = () => {
 
         .welcome-icon {
           color: #667eea;
+          animation: bounce 2s infinite;
         }
       }
 
@@ -585,7 +681,8 @@ const clearHistory = () => {
 
         .message-item {
           display: flex;
-          gap: 8px;
+          gap: 10px;
+          animation: slideIn 0.3s ease;
 
           &.user {
             flex-direction: row-reverse;
@@ -593,11 +690,17 @@ const clearHistory = () => {
 
           .avatar {
             flex-shrink: 0;
+            transition: transform 0.3s ease;
+
+            &:hover {
+              transform: scale(1.1);
+            }
 
             &.ai {
               .ai-avatar {
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: #fff;
+                box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
               }
             }
 
@@ -610,7 +713,7 @@ const clearHistory = () => {
           }
 
           .message-content {
-            max-width: 70%;
+            max-width: 75%;
             position: relative;
 
             // ========== P0: CSS 补丁 - 确保换行和长词正确显示 ==========
@@ -619,10 +722,12 @@ const clearHistory = () => {
 
             &.user {
               .message-bubble {
-                background: #409eff;
+                background: linear-gradient(135deg, #409eff 0%, #667eea 100%);
                 color: #fff;
-                border-radius: 16px 16px 0 16px;
-                padding: 12px 16px;
+                border-radius: 18px 18px 4px 18px;
+                padding: 14px 18px;
+                box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+                transition: all 0.3s ease;
               }
 
               .message-time {
@@ -634,9 +739,14 @@ const clearHistory = () => {
               .message-bubble {
                 background: #fff;
                 color: #303133;
-                border-radius: 16px 16px 16px 0;
-                padding: 12px 16px;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+                border-radius: 18px 18px 18px 4px;
+                padding: 14px 18px;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+                transition: all 0.3s ease;
+
+                &:hover {
+                  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+                }
 
                 .markdown-content {
                   // ========== P0: 基础样式 ==========
@@ -657,6 +767,7 @@ const clearHistory = () => {
                     padding: 12px;
                     overflow-x: auto;
                     margin: 8px 0;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 
                     code {
                       font-family: 'Consolas', 'Monaco', monospace;
@@ -684,7 +795,7 @@ const clearHistory = () => {
                   }
 
                   :deep(blockquote) {
-                    border-left: 4px solid #409eff;
+                    border-left: 4px solid #667eea;
                     padding-left: 12px;
                     margin: 8px 0;
                     color: #666;
@@ -693,6 +804,7 @@ const clearHistory = () => {
                   :deep(h1), :deep(h2), :deep(h3), :deep(h4), :deep(h5), :deep(h6) {
                     margin: 12px 0 8px 0;
                     font-weight: 600;
+                    color: #667eea;
                   }
 
                   :deep(h1) { font-size: 20px; }
@@ -700,10 +812,13 @@ const clearHistory = () => {
                   :deep(h3) { font-size: 16px; }
 
                   :deep(a) {
-                    color: #409eff;
+                    color: #667eea;
                     text-decoration: none;
+                    font-weight: 500;
+                    transition: all 0.3s ease;
                     &:hover {
                       text-decoration: underline;
+                      color: #764ba2;
                     }
                   }
 
@@ -711,6 +826,7 @@ const clearHistory = () => {
                     border-collapse: collapse;
                     width: 100%;
                     margin: 8px 0;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 
                     th, td {
                       border: 1px solid #e6e6e6;
@@ -721,6 +837,7 @@ const clearHistory = () => {
                     th {
                       background: #f5f7fa;
                       font-weight: 600;
+                      color: #667eea;
                     }
                   }
 
@@ -729,6 +846,7 @@ const clearHistory = () => {
                     background: #f6f8fa;
                     padding: 12px;
                     border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
                   }
 
                   // ========== P0: 空消息占位样式 ==========
@@ -745,8 +863,15 @@ const clearHistory = () => {
               align-items: center;
               gap: 8px;
               padding: 10px 14px;
-              border-radius: 8px;
+              border-radius: 12px;
               font-size: 13px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+              transition: all 0.3s ease;
+
+              &:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+              }
 
               &.thinking {
                 background: #e6f7ff;
@@ -770,6 +895,7 @@ const clearHistory = () => {
 
               .status-icon {
                 font-size: 16px;
+                animation: pulse 1.5s infinite;
               }
 
               .tool-name {
@@ -782,20 +908,23 @@ const clearHistory = () => {
             .message-time {
               font-size: 11px;
               color: #909399;
-              margin-top: 4px;
+              margin-top: 6px;
             }
           }
         }
 
         .typing-indicator {
           display: flex;
-          gap: 4px;
-          padding: 12px 16px;
+          gap: 6px;
+          padding: 14px 18px;
+          background: #fff;
+          border-radius: 18px 18px 18px 4px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 
           span {
-            width: 8px;
-            height: 8px;
-            background: #667eea;
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 50%;
             animation: typing 1.4s infinite;
 
@@ -822,36 +951,110 @@ const clearHistory = () => {
         justify-content: center;
         align-items: center;
         color: #fff;
-        gap: 8px;
-        border-radius: 8px;
+        gap: 12px;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+        animation: fadeIn 0.3s ease;
+
+        .el-icon {
+          animation: bounce 1.5s infinite;
+        }
       }
     }
 
     .file-preview {
-      padding: 8px 16px;
+      padding: 10px 18px;
       background: #f5f7fa;
       border-top: 1px solid #e6e6e6;
+      animation: slideIn 0.3s ease;
+
+      .el-tag {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        border: none;
+        font-size: 13px;
+        padding: 4px 12px;
+
+        .el-icon {
+          margin-right: 6px;
+        }
+
+        .el-tag__close {
+          color: #fff;
+          opacity: 0.8;
+
+          &:hover {
+            opacity: 1;
+          }
+        }
+      }
     }
 
     .chat-input {
-      padding: 12px;
+      padding: 14px 16px;
       background: #fff;
-      border-top: 1px solid #e6e6e6;
+      border-top: 1px solid #e5e7eb;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 
       .input-tools {
         display: flex;
-        gap: 8px;
-        margin-bottom: 8px;
+        gap: 10px;
+        margin-bottom: 10px;
 
         .file-input {
           display: none;
+        }
+
+        .el-button {
+          transition: all 0.3s ease;
+
+          &:hover {
+            color: #667eea;
+            transform: scale(1.1);
+          }
+        }
+      }
+
+      .el-input {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+
+        &:hover {
+          border-color: #667eea;
+          box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea {
+          border-radius: 12px;
+          resize: none;
         }
       }
 
       .input-actions {
         display: flex;
         justify-content: flex-end;
-        margin-top: 8px;
+        margin-top: 10px;
+
+        .el-button {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: none;
+          border-radius: 12px;
+          padding: 8px 20px;
+          transition: all 0.3s ease;
+
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+          }
+
+          &:disabled {
+            background: #e5e7eb;
+            color: #909399;
+            transform: none;
+            box-shadow: none;
+          }
+        }
       }
     }
   }
@@ -864,14 +1067,54 @@ const clearHistory = () => {
     opacity: 0.4;
   }
   50% {
-    transform: translateY(-4px);
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
     opacity: 1;
   }
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s;
+  transition: opacity 0.3s ease;
 }
 
 .fade-enter-from,
@@ -881,7 +1124,7 @@ const clearHistory = () => {
 
 .slide-enter-active,
 .slide-leave-active {
-  transition: transform 0.3s, opacity 0.3s;
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .slide-enter-from,

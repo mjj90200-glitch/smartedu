@@ -571,15 +571,28 @@ public class AIAnalysisService {
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-            Map<String, String> input = new HashMap<>();
-            input.put("prompt", prompt.toString());
-            requestBody.put("input", input);
+            
+            // 使用OpenAI兼容格式 - messages字段
+            List<Map<String, String>> messages = new ArrayList<>();
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", "你是一位教学经验丰富的教师，擅长分析学情数据并提供专业建议。");
+            messages.add(systemMessage);
+            
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", prompt.toString());
+            messages.add(userMessage);
+            
+            requestBody.put("messages", messages);
+            requestBody.put("temperature", 0.7);
+            requestBody.put("max_tokens", 512);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-            ResponseEntity<String> response = restTemplate.exchange(endpoint, HttpMethod.POST, entity, String.class);
+            ResponseEntity<String> response = restTemplate.exchange(endpoint + "/chat/completions", HttpMethod.POST, entity, String.class);
 
             JsonNode rootNode = objectMapper.readTree(response.getBody());
-            return rootNode.path("output").path("text").asText();
+            return rootNode.path("choices").get(0).path("message").path("content").asText();
 
         } catch (Exception e) {
             log.warn("AI 分析生成失败：{}", e.getMessage());
@@ -610,15 +623,28 @@ public class AIAnalysisService {
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-            Map<String, String> input = new HashMap<>();
-            input.put("prompt", prompt.toString());
-            requestBody.put("input", input);
+            
+            // 使用OpenAI兼容格式 - messages字段
+            List<Map<String, String>> messages = new ArrayList<>();
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", "你是一位教学经验丰富的教师，擅长分析学情数据并提供专业建议。");
+            messages.add(systemMessage);
+            
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", prompt.toString());
+            messages.add(userMessage);
+            
+            requestBody.put("messages", messages);
+            requestBody.put("temperature", 0.7);
+            requestBody.put("max_tokens", 512);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-            ResponseEntity<String> response = restTemplate.exchange(endpoint, HttpMethod.POST, entity, String.class);
+            ResponseEntity<String> response = restTemplate.exchange(endpoint + "/chat/completions", HttpMethod.POST, entity, String.class);
 
             JsonNode rootNode = objectMapper.readTree(response.getBody());
-            return rootNode.path("output").path("text").asText();
+            return rootNode.path("choices").get(0).path("message").path("content").asText();
 
         } catch (Exception e) {
             log.warn("AI 建议生成失败：{}", e.getMessage());
@@ -643,15 +669,28 @@ public class AIAnalysisService {
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-            Map<String, String> input = new HashMap<>();
-            input.put("prompt", prompt.toString());
-            requestBody.put("input", input);
+            
+            // 使用OpenAI兼容格式 - messages字段
+            List<Map<String, String>> messages = new ArrayList<>();
+            Map<String, String> systemMessage = new HashMap<>();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", "你是一位教学经验丰富的教师，擅长分析学情数据并提供专业建议。");
+            messages.add(systemMessage);
+            
+            Map<String, String> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", prompt.toString());
+            messages.add(userMessage);
+            
+            requestBody.put("messages", messages);
+            requestBody.put("temperature", 0.7);
+            requestBody.put("max_tokens", 512);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-            ResponseEntity<String> response = restTemplate.exchange(endpoint, HttpMethod.POST, entity, String.class);
+            ResponseEntity<String> response = restTemplate.exchange(endpoint + "/chat/completions", HttpMethod.POST, entity, String.class);
 
             JsonNode rootNode = objectMapper.readTree(response.getBody());
-            return rootNode.path("output").path("text").asText();
+            return rootNode.path("choices").get(0).path("message").path("content").asText();
 
         } catch (Exception e) {
             log.warn("AI 教学建议生成失败：{}", e.getMessage());

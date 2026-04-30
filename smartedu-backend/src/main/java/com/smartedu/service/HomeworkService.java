@@ -31,18 +31,21 @@ public class HomeworkService extends ServiceImpl<HomeworkMapper, Homework> {
     private final UserMapper userMapper;
     private final AIGradeService aiGradeService;
     private final HomeworkAnalysisService homeworkAnalysisService;
+    private final StudentLearningAnalysisService studentLearningAnalysisService;
 
     public HomeworkService(
             HomeworkSubmissionMapper submissionMapper,
             CourseMapper courseMapper,
             UserMapper userMapper,
             AIGradeService aiGradeService,
-            HomeworkAnalysisService homeworkAnalysisService) {
+            HomeworkAnalysisService homeworkAnalysisService,
+            StudentLearningAnalysisService studentLearningAnalysisService) {
         this.submissionMapper = submissionMapper;
         this.courseMapper = courseMapper;
         this.userMapper = userMapper;
         this.aiGradeService = aiGradeService;
         this.homeworkAnalysisService = homeworkAnalysisService;
+        this.studentLearningAnalysisService = studentLearningAnalysisService;
     }
 
     /**
@@ -316,6 +319,330 @@ public class HomeworkService extends ServiceImpl<HomeworkMapper, Homework> {
         vo.setLateSubmissionCount(lateCount);
 
         return vo;
+    }
+
+    public Map<String, Object> getTeacherAnalysisOverview(Long teacherId, Long courseId) {
+        Course course = courseMapper.selectById(courseId);
+        if (course == null) {
+            throw new BusinessException("课程不存在");
+        }
+        if (!canTeacherAccessCourse(teacherId, courseId, course)) {
+            throw new BusinessException("无权限查看该课程");
+        }
+
+        List<Homework> homeworks = baseMapper.selectList(new LambdaQueryWrapper<Homework>()
+            .eq(Homework::getTeacherId, teacherId)
+            .eq(Homework::getCourseId, courseId)
+            .eq(Homework::getStatus, 1)
+            .orderByDesc(Homework::getCreatedAt));
+
+        List<User> students = findCourseStudents(course);
+        List<Long> homeworkIds = homeworks.stream().map(Homework::getId).collect(Collectors.toList());
+        List<HomeworkSubmission> submissions = homeworkIds.isEmpty()
+            ? Collections.emptyList()
+            : submissionMapper.selectList(new LambdaQueryWrapper<HomeworkSubmission>()
+                .in(HomeworkSubmission::getHomeworkId, homeworkIds)
+                .orderByDesc(HomeworkSubmission::getSubmitTime));
+
+        Map<Long, Map<Long, HomeworkSubmission>> latestSubmissionMap = new HashMap<>();
+        for (HomeworkSubmission submission : submissions) {
+            latestSubmissionMap
+                .computeIfAbsent(submission.getHomeworkId(), key -> new HashMap<>())
+                .putIfAbsent(submission.getUserId(), submission);
+        }
+
+        List<Map<String, Object>> homeworkProgress = buildHomeworkProgress(homeworks, students.size(), latestSubmissionMap);
+        List<Map<String, Object>> studentAnalysisList = buildStudentAnalysis(homeworks, students, latestSubmissionMap);
+
+        long submittedStudentCount = studentAnalysisList.stream()
+            .filter(item -> ((Integer) item.get("submittedCount")) > 0)
+            .count();
+        long gradedStudentCount = studentAnalysisList.stream()
+            .filter(item -> ((Integer) item.get("gradedCount")) > 0)
+            .count();
+        double courseAverage = studentAnalysisList.stream()
+            .map(item -> (BigDecimal) item.get("averageScore"))
+            .filter(Objects::nonNull)
+            .mapToDouble(BigDecimal::doubleValue)
+            .average()
+            .orElse(0.0);
+
+        Map<String, Long> levelDistribution = studentAnalysisList.stream()
+            .collect(Collectors.groupingBy(item -> String.valueOf(item.get("level")), LinkedHashMap::new, Collectors.counting()));
+
+        List<Map<String, Object>> passStudents = studentAnalysisList.stream()
+            .filter(item -> Boolean.TRUE.equals(item.get("passed")))
+            .collect(Collectors.toList());
+        List<Map<String, Object>> attentionStudents = studentAnalysisList.stream()
+            .filter(item -> Boolean.TRUE.equals(item.get("needsAttention")))
+            .collect(Collectors.toList());
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("courseId", courseId);
+        summary.put("courseName", course.getCourseName());
+        summary.put("totalHomeworkCount", homeworks.size());
+        summary.put("studentCount", students.size());
+        summary.put("submittedStudentCount", submittedStudentCount);
+        summary.put("gradedStudentCount", gradedStudentCount);
+        summary.put("averageScore", BigDecimal.valueOf(courseAverage).setScale(2, RoundingMode.HALF_UP));
+        summary.put("completionRate", students.isEmpty() || homeworks.isEmpty()
+            ? BigDecimal.ZERO
+            : percentage(
+                studentAnalysisList.stream().mapToInt(item -> (Integer) item.get("submittedCount")).sum(),
+                students.size() * homeworks.size()
+            ));
+        summary.put("levelDistribution", levelDistribution);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("summary", summary);
+        result.put("homeworkProgress", homeworkProgress);
+        result.put("studentAnalysis", studentAnalysisList);
+        result.put("passStudents", passStudents);
+        result.put("attentionStudents", attentionStudents);
+        return result;
+    }
+
+    public Map<String, Object> getStudentAnalysisDetail(Long teacherId, Long courseId, Long studentId) {
+        Map<String, Object> overview = getTeacherAnalysisOverview(teacherId, courseId);
+        List<Map<String, Object>> students = (List<Map<String, Object>>) overview.get("studentAnalysis");
+        return students.stream()
+            .filter(item -> Objects.equals(((Number) item.get("studentId")).longValue(), studentId))
+            .findFirst()
+            .orElseThrow(() -> new BusinessException("学生不存在或不在当前课程范围内"));
+    }
+
+    public Map<String, Object> remindStudents(Long teacherId, Long courseId, List<Long> studentIds, String message) {
+        Course course = courseMapper.selectById(courseId);
+        if (course == null) {
+            throw new BusinessException("课程不存在");
+        }
+        if (!canTeacherAccessCourse(teacherId, courseId, course)) {
+            throw new BusinessException("无权限提醒该课程学生");
+        }
+
+        if (studentIds == null || studentIds.isEmpty()) {
+            throw new BusinessException("请选择要提醒的学生");
+        }
+
+        List<User> students = userMapper.selectBatchIds(studentIds).stream()
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+
+        String finalMessage = studentLearningAnalysisService.createReminders(teacherId, courseId, students, message);
+
+        org.slf4j.LoggerFactory.getLogger(HomeworkService.class)
+            .info("教师{}提醒学生{}，课程{}，内容：{}", teacherId, studentIds, courseId, finalMessage);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("courseId", courseId);
+        result.put("remindedCount", students.size());
+        result.put("studentNames", students.stream().map(User::getRealName).collect(Collectors.toList()));
+        result.put("message", finalMessage);
+        return result;
+    }
+
+    private List<Map<String, Object>> buildHomeworkProgress(List<Homework> homeworks, int studentCount,
+                                                            Map<Long, Map<Long, HomeworkSubmission>> latestSubmissionMap) {
+        List<Map<String, Object>> progressList = new ArrayList<>();
+        for (Homework homework : homeworks) {
+            Map<Long, HomeworkSubmission> homeworkSubmissions = latestSubmissionMap.getOrDefault(homework.getId(), Collections.emptyMap());
+            int submittedCount = homeworkSubmissions.size();
+            int gradedCount = (int) homeworkSubmissions.values().stream().filter(sub -> sub.getScore() != null).count();
+            int lateCount = (int) homeworkSubmissions.values().stream().filter(sub -> Objects.equals(sub.getIsLate(), 1)).count();
+            double averageScore = homeworkSubmissions.values().stream()
+                .filter(sub -> sub.getScore() != null)
+                .map(HomeworkSubmission::getScore)
+                .mapToDouble(BigDecimal::doubleValue)
+                .average()
+                .orElse(0.0);
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("homeworkId", homework.getId());
+            item.put("title", homework.getTitle());
+            item.put("endTime", homework.getEndTime());
+            item.put("submittedCount", submittedCount);
+            item.put("unsubmittedCount", Math.max(studentCount - submittedCount, 0));
+            item.put("gradedCount", gradedCount);
+            item.put("lateCount", lateCount);
+            item.put("averageScore", BigDecimal.valueOf(averageScore).setScale(2, RoundingMode.HALF_UP));
+            item.put("completionRate", studentCount == 0 ? BigDecimal.ZERO : percentage(submittedCount, studentCount));
+            progressList.add(item);
+        }
+        return progressList;
+    }
+
+    private List<Map<String, Object>> buildStudentAnalysis(List<Homework> homeworks, List<User> students,
+                                                           Map<Long, Map<Long, HomeworkSubmission>> latestSubmissionMap) {
+        List<Map<String, Object>> studentAnalysis = new ArrayList<>();
+        for (User student : students) {
+            int submittedCount = 0;
+            int gradedCount = 0;
+            int lateCount = 0;
+            List<BigDecimal> gradedScores = new ArrayList<>();
+            List<Map<String, Object>> homeworkDetails = new ArrayList<>();
+
+            for (Homework homework : homeworks) {
+                HomeworkSubmission submission = latestSubmissionMap
+                    .getOrDefault(homework.getId(), Collections.emptyMap())
+                    .get(student.getId());
+
+                Map<String, Object> homeworkItem = new LinkedHashMap<>();
+                homeworkItem.put("homeworkId", homework.getId());
+                homeworkItem.put("title", homework.getTitle());
+                homeworkItem.put("submitStatus", submission == null ? "未提交" : (Objects.equals(submission.getIsLate(), 1) ? "迟交" : "已提交"));
+                homeworkItem.put("submitTime", submission == null ? null : submission.getSubmitTime());
+                homeworkItem.put("score", submission == null ? null : submission.getScore());
+                homeworkItem.put("gradeStatus", submission == null ? null : submission.getGradeStatus());
+                homeworkDetails.add(homeworkItem);
+
+                if (submission != null) {
+                    submittedCount++;
+                    if (Objects.equals(submission.getIsLate(), 1)) {
+                        lateCount++;
+                    }
+                    if (submission.getScore() != null) {
+                        gradedCount++;
+                        gradedScores.add(submission.getScore());
+                    }
+                }
+            }
+
+            BigDecimal averageScore = gradedScores.isEmpty()
+                ? BigDecimal.ZERO
+                : gradedScores.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(gradedScores.size()), 2, RoundingMode.HALF_UP);
+            BigDecimal gpa = calculateGpa(averageScore);
+            String level = levelByScore(averageScore);
+            boolean passed = averageScore.compareTo(new BigDecimal("60")) >= 0 && gradedCount > 0;
+            boolean needsAttention = !passed || submittedCount < homeworks.size();
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("studentId", student.getId());
+            item.put("studentName", student.getRealName());
+            item.put("className", student.getClassName());
+            item.put("major", student.getMajor());
+            item.put("submittedCount", submittedCount);
+            item.put("gradedCount", gradedCount);
+            item.put("missingCount", Math.max(homeworks.size() - submittedCount, 0));
+            item.put("lateCount", lateCount);
+            item.put("averageScore", averageScore);
+            item.put("gpa", gpa);
+            item.put("level", level);
+            item.put("passed", passed);
+            item.put("needsAttention", needsAttention);
+            item.put("analysis", buildStudentAnalysisText(level, averageScore, submittedCount, homeworks.size(), lateCount));
+            item.put("homeworks", homeworkDetails);
+            studentAnalysis.add(item);
+        }
+
+        studentAnalysis.sort(Comparator
+            .comparing((Map<String, Object> item) -> (BigDecimal) item.get("averageScore")).reversed()
+            .thenComparing(item -> String.valueOf(item.get("studentName"))));
+        return studentAnalysis;
+    }
+
+    private List<User> findCourseStudents(Course course) {
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(User::getRole, "STUDENT");
+        queryWrapper.eq(User::getStatus, 1);
+        queryWrapper.eq(course.getGrade() != null && !course.getGrade().isBlank(), User::getGrade, course.getGrade());
+        queryWrapper.eq(course.getMajor() != null && !course.getMajor().isBlank(), User::getMajor, course.getMajor());
+        queryWrapper.orderByAsc(User::getRealName);
+        List<User> matchedStudents = userMapper.selectList(queryWrapper);
+
+        java.util.LinkedHashMap<Long, User> mergedStudents = new java.util.LinkedHashMap<>();
+        for (User student : matchedStudents) {
+            mergedStudents.put(student.getId(), student);
+        }
+
+        List<Homework> courseHomeworks = baseMapper.selectList(new LambdaQueryWrapper<Homework>()
+            .eq(Homework::getCourseId, course.getId())
+            .select(Homework::getId));
+
+        List<Long> homeworkIds = courseHomeworks.stream()
+            .map(Homework::getId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+
+        if (!homeworkIds.isEmpty()) {
+            List<HomeworkSubmission> submissions = submissionMapper.selectList(new LambdaQueryWrapper<HomeworkSubmission>()
+                .in(HomeworkSubmission::getHomeworkId, homeworkIds)
+                .select(HomeworkSubmission::getUserId));
+
+            for (HomeworkSubmission submission : submissions) {
+                if (submission.getUserId() == null || mergedStudents.containsKey(submission.getUserId())) {
+                    continue;
+                }
+                User student = userMapper.selectById(submission.getUserId());
+                if (student != null && "STUDENT".equals(student.getRole()) && Objects.equals(student.getStatus(), 1)) {
+                    mergedStudents.put(student.getId(), student);
+                }
+            }
+        }
+
+        return new java.util.ArrayList<>(mergedStudents.values());
+    }
+
+    private boolean canTeacherAccessCourse(Long teacherId, Long courseId, Course course) {
+        if (Objects.equals(course.getTeacherId(), teacherId)) {
+            return true;
+        }
+        Long homeworkCount = baseMapper.selectCount(new LambdaQueryWrapper<Homework>()
+            .eq(Homework::getTeacherId, teacherId)
+            .eq(Homework::getCourseId, courseId));
+        return homeworkCount != null && homeworkCount > 0;
+    }
+
+    private BigDecimal percentage(int numerator, int denominator) {
+        if (denominator <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.valueOf(numerator * 100.0 / denominator).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal calculateGpa(BigDecimal averageScore) {
+        if (averageScore.compareTo(new BigDecimal("90")) >= 0) {
+            return new BigDecimal("4.0");
+        }
+        if (averageScore.compareTo(new BigDecimal("80")) >= 0) {
+            return new BigDecimal("3.0");
+        }
+        if (averageScore.compareTo(new BigDecimal("70")) >= 0) {
+            return new BigDecimal("2.0");
+        }
+        if (averageScore.compareTo(new BigDecimal("60")) >= 0) {
+            return new BigDecimal("1.0");
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private String levelByScore(BigDecimal averageScore) {
+        if (averageScore.compareTo(new BigDecimal("90")) >= 0) {
+            return "优秀";
+        }
+        if (averageScore.compareTo(new BigDecimal("80")) >= 0) {
+            return "良好";
+        }
+        if (averageScore.compareTo(new BigDecimal("70")) >= 0) {
+            return "中等";
+        }
+        if (averageScore.compareTo(new BigDecimal("60")) >= 0) {
+            return "及格";
+        }
+        return "待提升";
+    }
+
+    private String buildStudentAnalysisText(String level, BigDecimal averageScore, int submittedCount,
+                                            int totalHomeworkCount, int lateCount) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("当前成绩等级为").append(level).append("，平均分 ").append(averageScore).append(" 分。");
+        builder.append(" 已完成 ").append(submittedCount).append("/").append(totalHomeworkCount).append(" 份作业。");
+        if (lateCount > 0) {
+            builder.append(" 其中有 ").append(lateCount).append(" 次迟交，需要关注时间管理。");
+        } else {
+            builder.append(" 提交节奏较稳定。");
+        }
+        return builder.toString();
     }
 
     /**

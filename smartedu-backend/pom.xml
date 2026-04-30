@@ -96,7 +96,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.36</version>
+            <version>1.18.38</version>
             <optional>true</optional>
         </dependency>
 
@@ -148,17 +148,11 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
-        <!-- Spring AI OpenAI Starter (1.0.0-M4 - stable version) -->
+        <!-- Spring AI OpenAI Starter -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
-            <version>1.0.0-M4</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.springframework.ai</groupId>
-                    <artifactId>spring-ai-retry</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>0.8.1</version>
         </dependency>
 
         <!-- Spring Retry (required for Spring AI) -->
@@ -193,13 +187,14 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
-                    <release>17</release>
+                    <source>17</source>
+                    <target>17</target>
                     <encoding>UTF-8</encoding>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
-                            <version>1.18.36</version>
+                            <version>1.18.38</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

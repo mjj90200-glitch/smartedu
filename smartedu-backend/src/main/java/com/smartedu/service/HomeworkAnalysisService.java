@@ -410,8 +410,8 @@ public class HomeworkAnalysisService {
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-            // 拼接完整的 API 路径（如果 endpoint 以 /v1 结尾，则添加 /chat/completions）
-            String apiUri = endpoint.endsWith("/v1") ? (endpoint + "/chat/completions") : endpoint;
+            // 拼接完整的 API 路径（如果 endpoint 以 /v1 或 /v3 结尾，则添加 /chat/completions）
+            String apiUri = (endpoint.endsWith("/v1") || endpoint.endsWith("/v3")) ? (endpoint + "/chat/completions") : endpoint;
 
             // ====== 健康检查日志 ======
             System.out.println("====== [AI 请求] 完整 URL: " + apiUri + " ======");

@@ -1,4 +1,4 @@
-import { get, post } from '@/utils/request'
+import { get, post, put } from '@/utils/request'
 
 // ==================== Dashboard 相关接口 ====================
 
@@ -7,51 +7,33 @@ export function getDashboardStats(userId: number) {
   return get('/student/learning/dashboard/stats', { userId })
 }
 
-// ==================== 知识图谱相关接口 ====================
-
-// 获取课程知识图谱
-export function getKnowledgeGraph(courseId: number) {
-  return get('/student/learning/knowledge-graph', { courseId })
+// 获取学生学习看板
+export function getLearningDashboard(userId: number, days?: number) {
+  return get('/student/learning/dashboard', { userId, days })
 }
 
-// ==================== 学习计划相关接口 ====================
-
-// 生成个性化学习计划
-export function generateLearningPlan(params: { courseId: number; targetScore?: number; days?: number }) {
-  return post('/student/learning/plan/generate', null, { params })
+export function saveLearningDashboardNote(
+  userId: number,
+  data: {
+    date: string
+    completedSummary: string
+    pendingSummary: string
+    aiToolSummary: string
+    reflection: string
+  }
+) {
+  return post('/student/learning/dashboard/note', data, { params: { userId } })
 }
 
-// 获取学习计划列表
-export function getLearningPlanList(status?: number) {
-  return get('/student/learning/plan/list', { status })
+export function getLearningDashboardNote(userId: number, date: string) {
+  return get('/student/learning/dashboard/note', { userId, date })
 }
 
-// 获取学习计划详情
-export function getLearningPlanDetail(id: number) {
-  return get(`/student/learning/plan/${id}`)
-}
 
-// 更新学习计划进度
-export function updateLearningPlanProgress(id: number, progress: number) {
-  return put(`/student/learning/plan/${id}/progress`, null, { params: { progress } })
-}
 
-// ==================== 错题分析相关接口 ====================
 
-// 获取错题分析报告
-export function analyzeErrorQuestions(courseId?: number) {
-  return get('/student/learning/error-analysis', { courseId })
-}
 
-// 获取错题列表
-export function getErrorQuestions(params?: { courseId?: number; reviewStatus?: number; pageNum?: number; pageSize?: number }) {
-  return get('/student/learning/error-questions', params)
-}
 
-// 标记错题为已复习
-export function markErrorQuestionAsReviewed(id: number) {
-  return post(`/student/learning/error-questions/${id}/review`)
-}
 
 // 获取推荐练习题
 export function getRecommendQuestions(count?: number) {
@@ -99,4 +81,31 @@ export const qaApi = {
   getHotQuestions: (params?: any) => get('/qa/hot-questions', params),
   // 点赞
   likeQA: (id: number) => post(`/qa/${id}/like`)
+}
+
+// ==================== 学情分析相关接口 ====================
+
+// 获取学生学情分析数据
+export function getStudentAnalysis(courseId: number) {
+  return get('/student/learning/analysis', { courseId })
+}
+
+// 获取当前学生可查看课程
+export function getStudentAnalysisCourses() {
+  return get('/student/learning/courses')
+}
+
+// 获取老师提醒列表
+export function getReminders(courseId?: number) {
+  return get('/student/learning/reminders', courseId ? { courseId } : undefined)
+}
+
+// 标记提醒为已读
+export function markReminderAsRead(reminderId: number) {
+  return post(`/student/learning/reminders/${reminderId}/read`)
+}
+
+// 标记所有提醒为已读
+export function markAllRemindersAsRead(courseId?: number) {
+  return post('/student/learning/reminders/read-all', null, { params: courseId ? { courseId } : undefined })
 }

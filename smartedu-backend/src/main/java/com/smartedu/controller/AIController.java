@@ -3,7 +3,10 @@ package com.smartedu.controller;
 import com.smartedu.common.result.Result;
 import com.smartedu.dto.AIChatRequestDTO;
 import com.smartedu.security.JwtAuthenticationToken;
+import com.smartedu.service.StudentAiUsageLogService;
 import com.smartedu.service.ai.AgentOrchestratorService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -42,9 +45,15 @@ public class AIController {
     private static final Logger logger = LoggerFactory.getLogger(AIController.class);
 
     private final AgentOrchestratorService agentOrchestratorService;
+    private final StudentAiUsageLogService studentAiUsageLogService;
+    private final ObjectMapper objectMapper;
 
-    public AIController(AgentOrchestratorService agentOrchestratorService) {
+    public AIController(AgentOrchestratorService agentOrchestratorService,
+                        StudentAiUsageLogService studentAiUsageLogService,
+                        ObjectMapper objectMapper) {
         this.agentOrchestratorService = agentOrchestratorService;
+        this.studentAiUsageLogService = studentAiUsageLogService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -56,25 +65,29 @@ public class AIController {
             @RequestBody AIChatRequestDTO request,
             @AuthenticationPrincipal UserDetails userDetails) {
 
-        // ========== 预防性鉴权检查 ==========
+        // 获取认证信息，如果没有则使用默认值
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            logger.warn("未认证的聊天请求");
-            return Result.error(401, "请先登录");
+        Long userId = extractUserId(auth);
+        String userRole = extractUserRole(auth);
+        
+        // 对于公开访问的请求，使用默认值
+        if (userId == null) {
+            userId = 0L; // 游客用户ID
+        }
+        if (userRole == null) {
+            userRole = "GUEST"; // 游客角色
         }
 
         String message = request.getMessage();
         List<Map<String, String>> history = request.getHistory();
 
-        // 显式提取用户信息
-        Long userId = extractUserId(auth);
         String username = extractUsername(auth);
-        String userRole = extractUserRole(auth);
 
         logger.info("收到聊天请求：message={}, user={}, userId={}", message, username, userId);
 
         try {
             String response = agentOrchestratorService.chat(message, history, userId, userRole);
+            studentAiUsageLogService.recordChatUsage(userId, userRole, "chat", message, response);
 
             Map<String, Object> result = new HashMap<>();
             result.put("message", response);
@@ -99,26 +112,22 @@ public class AIController {
     @Operation(summary = "AI 聊天（流式）", description = "与 AI 助手进行流式对话，支持打字机效果")
     public Flux<String> chatStream(@RequestBody AIChatRequestDTO request) {
 
-        // ========== P0: 预防性鉴权检查（首行执行）==========
+        // 获取认证信息，如果没有则使用默认值
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            logger.warn("未认证的流式聊天请求");
-            // Spring 会自动包装为 SSE 格式，只返回 JSON 错误字符串
-            return Flux.just("{\"error\": \"请先登录\"}");
-        }
+        final Long userId = extractUserId(auth) != null ? extractUserId(auth) : 0L; // 游客用户ID
+        final String userRole = extractUserRole(auth) != null ? extractUserRole(auth) : "GUEST"; // 游客角色
 
         String message = request.getMessage();
         List<Map<String, String>> history = request.getHistory();
 
-        // ========== 显式身份传递（方案一）==========
-        final Long userId = extractUserId(auth);
         final String username = extractUsername(auth);
-        final String userRole = extractUserRole(auth);
 
         logger.info("收到流式聊天请求：message={}, user={}, userId={}", message, username, userId);
 
-        // 调用 Service，显式传递身份信息
-        return agentOrchestratorService.chatStream(message, history, userId, userRole, username)
+        String response = agentOrchestratorService.chat(message, history, userId, userRole);
+        studentAiUsageLogService.recordChatUsage(userId, userRole, "chat_stream", message, response);
+
+        return agentOrchestratorService.streamText(response, username)
             .doOnSubscribe(subscription -> logger.info("流式订阅开始 - 用户：{}", username))
             .doOnComplete(() -> logger.info("流式响应完成 - 用户：{}", username))
             .doOnError(e -> logger.error("流式响应错误 - 用户：{}, 错误：{}", username, e.getMessage()))
@@ -127,7 +136,7 @@ public class AIController {
                 logger.error("AI 流式处理异常，返回错误 SSE", e);
                 String errorMessage = e.getMessage() != null ? e.getMessage() : "AI 服务暂时不可用";
                 // Spring 会自动包装为 SSE 格式
-                return Flux.just("{\"error\": \"" + errorMessage.replace("\"", "\\\"") + "\"}");
+                return Flux.just(buildErrorSse(errorMessage));
             });
     }
 
@@ -144,13 +153,13 @@ public class AIController {
 
         // ========== 预防性鉴权检查 ==========
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
+        Long userId = extractUserId(auth);
+        String userRole = extractUserRole(auth);
+        if (userId == null || userRole == null) {
             return Result.error(401, "请先登录");
         }
 
-        Long userId = extractUserId(auth);
         String username = extractUsername(auth);
-        String userRole = extractUserRole(auth);
 
         logger.info("收到带文件的聊天请求：message={}, fileName={}, user={}, userId={}", message,
             file != null ? file.getOriginalFilename() : "none",
@@ -183,6 +192,7 @@ public class AIController {
             } else {
                 response = agentOrchestratorService.chat(message, history, userId, userRole);
             }
+            studentAiUsageLogService.recordChatUsage(userId, userRole, fileUrl != null ? "upload_chat" : "chat", message, response);
 
             Map<String, Object> result = new HashMap<>();
             result.put("message", response);
@@ -208,15 +218,14 @@ public class AIController {
 
         // ========== P0: 预防性鉴权检查 ==========
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
+        final Long userId = extractUserId(auth);
+        final String userRole = extractUserRole(auth);
+        if (userId == null || userRole == null) {
             logger.warn("未认证的带文件流式聊天请求");
-            // Spring 会自动包装为 SSE 格式
             return Flux.just("{\"error\": \"请先登录\"}");
         }
 
-        final Long userId = extractUserId(auth);
         final String username = extractUsername(auth);
-        final String userRole = extractUserRole(auth);
 
         logger.info("收到带文件的流式聊天请求：message={}, fileName={}, user={}, userId={}", message,
             file != null ? file.getOriginalFilename() : "none",
@@ -243,20 +252,23 @@ public class AIController {
             final String finalFileUrl = fileUrl;
             final List<Map<String, String>> finalHistory = history;
 
-            return agentOrchestratorService.chatWithFileStream(message, finalFileUrl, finalHistory, userId, userRole, username)
+            String response = finalFileUrl != null
+                ? agentOrchestratorService.chatWithFile(message, finalFileUrl, finalHistory, userId, userRole)
+                : agentOrchestratorService.chat(message, finalHistory, userId, userRole);
+            studentAiUsageLogService.recordChatUsage(userId, userRole, finalFileUrl != null ? "upload_stream" : "chat_stream", message, response);
+
+            return agentOrchestratorService.streamText(response, username)
                 .doOnSubscribe(subscription -> logger.info("带文件流式订阅开始 - 用户：{}", username))
                 .doOnComplete(() -> logger.info("带文件流式响应完成 - 用户：{}", username))
                 .doOnError(e -> logger.error("带文件流式响应错误 - 用户：{}, 错误：{}", username, e.getMessage()))
-                // ========== P1: 流式容错 ==========
                 .onErrorResume(e -> {
                     logger.error("AI 带文件流式处理异常，返回错误 SSE", e);
                     String errorMessage = e.getMessage() != null ? e.getMessage() : "AI 服务暂时不可用";
-                    // Spring 会自动包装为 SSE 格式
-                    return Flux.just("{\"error\": \"" + errorMessage.replace("\"", "\\\"") + "\"}");
+                    return Flux.just(buildErrorSse(errorMessage));
                 });
         } catch (Exception e) {
             logger.error("带文件流式聊天处理失败", e);
-            return Flux.just("{\"error\": \"AI 处理失败：" + e.getMessage().replace("\"", "\\\"") + "\"}");
+            return Flux.just(buildErrorSse("AI 处理失败：" + e.getMessage()));
         }
     }
 
@@ -343,8 +355,10 @@ public class AIController {
      */
     @SuppressWarnings("unchecked")
     private List<Map<String, String>> parseHistoryJson(String historyJson) {
-        // 这里应该使用 ObjectMapper，但为了简化，返回 null
-        // 实际项目中应该注入 ObjectMapper 并正确解析
-        return null;
+        try {
+            return objectMapper.readValue(historyJson, new TypeReference<List<Map<String, String>>>() {});
+        } catch (IOException e) {
+            throw new RuntimeException("解析历史记录失败", e);
+        }
     }
 }

@@ -1,4 +1,4 @@
-import { post, postFile, get } from '@/utils/request'
+import { post, postFile } from '@/utils/request'
 
 /**
  * 消息类型枚举
@@ -47,6 +47,14 @@ export interface ConversationHistory {
 export interface ChatResponse {
   message: string
   timestamp: string
+}
+
+function extractSseDataLine(line: string): string | null {
+  if (!line.startsWith('data:')) {
+    return null
+  }
+  const payload = line.slice(5)
+  return payload.startsWith(' ') ? payload.slice(1) : payload
 }
 
 /**
@@ -211,8 +219,8 @@ export async function sendChatMessageStream(
         let errorMessage = ''
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)  // 不 trim，保留原始格式
+          const data = extractSseDataLine(line)
+          if (data !== null) {
 
             // 检测错误 JSON
             if (data.startsWith('{') && data.includes('"error"')) {
@@ -261,8 +269,8 @@ export async function sendChatMessageStream(
       let dataContent = ''
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
+        const data = extractSseDataLine(line)
+        if (data !== null) {
           if (dataContent) {
             dataContent += '\n'
           }
@@ -403,8 +411,8 @@ export async function sendChatMessageWithFileStream(
         let errorMessage = ''
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
+          const data = extractSseDataLine(line)
+          if (data !== null) {
 
             if (data.startsWith('{') && data.includes('"error"')) {
               try {
@@ -443,8 +451,8 @@ export async function sendChatMessageWithFileStream(
       let dataContent = ''
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
+        const data = extractSseDataLine(line)
+        if (data !== null) {
           if (dataContent) {
             dataContent += '\n'
           }

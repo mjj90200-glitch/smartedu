@@ -366,7 +366,7 @@ const handleLogin = async () => {
           if (role === 'STUDENT') {
             targetPath = '/student/dashboard'
           } else if (role === 'TEACHER' || role === 'ADMIN') {
-            targetPath = '/teacher/dashboard'
+            targetPath = '/teacher/homework'
           } else {
             targetPath = '/home'
           }

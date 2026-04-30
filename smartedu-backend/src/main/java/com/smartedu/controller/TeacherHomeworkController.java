@@ -15,7 +15,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -193,6 +192,56 @@ public class TeacherHomeworkController {
         Long teacherId = getUserId(userDetails);
         homeworkService.deleteHomework(id, teacherId);
         return Result.success("删除成功");
+    }
+
+    @GetMapping("/analysis/overview")
+    @Operation(summary = "教师学情分析总览", description = "按课程查看作业完成情况、成绩分析和需提醒学生")
+    public Result<Map<String, Object>> getAnalysisOverview(
+            @RequestParam Long courseId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long teacherId = getUserId(userDetails);
+        return Result.success("获取成功", homeworkService.getTeacherAnalysisOverview(teacherId, courseId));
+    }
+
+    @GetMapping("/analysis/student/{studentId}")
+    @Operation(summary = "教师查看单个学生学情分析")
+    public Result<Map<String, Object>> getStudentAnalysisDetail(
+            @PathVariable Long studentId,
+            @RequestParam Long courseId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long teacherId = getUserId(userDetails);
+        return Result.success("获取成功", homeworkService.getStudentAnalysisDetail(teacherId, courseId, studentId));
+    }
+
+    @PostMapping("/analysis/remind")
+    @Operation(summary = "提醒学生关注学习情况")
+    public Result<Map<String, Object>> remindStudents(
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Long teacherId = getUserId(userDetails);
+        Number courseIdValue = (Number) body.get("courseId");
+        if (courseIdValue == null) {
+            return Result.error("courseId 不能为空");
+        }
+
+        java.util.List<Long> studentIds = new java.util.ArrayList<>();
+        Object rawStudentIds = body.get("studentIds");
+        if (rawStudentIds instanceof java.util.List<?>) {
+            for (Object item : (java.util.List<?>) rawStudentIds) {
+                if (item instanceof Number) {
+                    studentIds.add(((Number) item).longValue());
+                }
+            }
+        }
+
+        String message = body.get("message") == null ? null : String.valueOf(body.get("message"));
+        Map<String, Object> result = homeworkService.remindStudents(
+            teacherId,
+            courseIdValue.longValue(),
+            studentIds,
+            message
+        );
+        return Result.success("提醒成功", result);
     }
 
     private Long getUserId(UserDetails userDetails) {

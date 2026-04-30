@@ -3,7 +3,9 @@ package com.smartedu.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartedu.common.result.Result;
 import com.smartedu.entity.Course;
+import com.smartedu.entity.Homework;
 import com.smartedu.mapper.CourseMapper;
+import com.smartedu.mapper.HomeworkMapper;
 import com.smartedu.security.JwtAuthenticationToken;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 课程控制器
@@ -24,9 +27,11 @@ import java.util.List;
 public class CourseController {
 
     private final CourseMapper courseMapper;
+    private final HomeworkMapper homeworkMapper;
 
-    public CourseController(CourseMapper courseMapper) {
+    public CourseController(CourseMapper courseMapper, HomeworkMapper homeworkMapper) {
         this.courseMapper = courseMapper;
+        this.homeworkMapper = homeworkMapper;
     }
 
     @GetMapping("/list")
@@ -47,12 +52,33 @@ public class CourseController {
 
         Long teacherId = getUserId(userDetails);
 
-        LambdaQueryWrapper<Course> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(Course::getTeacherId, teacherId);
-        queryWrapper.eq(Course::getStatus, 1);
-        queryWrapper.orderByDesc(Course::getCreatedAt);
+        LambdaQueryWrapper<Course> ownedCourseWrapper = new LambdaQueryWrapper<>();
+        ownedCourseWrapper.eq(Course::getTeacherId, teacherId);
+        ownedCourseWrapper.eq(Course::getStatus, 1);
+        ownedCourseWrapper.orderByDesc(Course::getCreatedAt);
+        List<Course> ownedCourses = courseMapper.selectList(ownedCourseWrapper);
 
-        List<Course> courses = courseMapper.selectList(queryWrapper);
+        LambdaQueryWrapper<Homework> homeworkWrapper = new LambdaQueryWrapper<>();
+        homeworkWrapper.eq(Homework::getTeacherId, teacherId);
+        homeworkWrapper.select(Homework::getCourseId);
+        List<Homework> teacherHomeworks = homeworkMapper.selectList(homeworkWrapper);
+
+        java.util.LinkedHashMap<Long, Course> mergedCourses = new java.util.LinkedHashMap<>();
+        for (Course course : ownedCourses) {
+            mergedCourses.put(course.getId(), course);
+        }
+
+        for (Homework homework : teacherHomeworks) {
+            if (homework.getCourseId() == null || mergedCourses.containsKey(homework.getCourseId())) {
+                continue;
+            }
+            Course course = courseMapper.selectById(homework.getCourseId());
+            if (course != null && course.getStatus() != null && course.getStatus() == 1) {
+                mergedCourses.put(course.getId(), course);
+            }
+        }
+
+        List<Course> courses = new java.util.ArrayList<>(mergedCourses.values());
         return Result.success("获取成功", courses);
     }
 
@@ -96,6 +122,41 @@ public class CourseController {
         return Result.success("课程创建成功", course.getId());
     }
 
+    @PostMapping("/teacher/assign")
+    @Transactional
+    @Operation(summary = "绑定教师课程", description = "教师勾选自己教授的课程")
+    public Result<Void> assignTeacherCourses(
+            @RequestBody TeacherCourseAssignRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        Long teacherId = getUserId(userDetails);
+        List<Long> selectedCourseIds = request.getCourseIds() == null ? java.util.Collections.emptyList() : request.getCourseIds();
+
+        List<Course> currentTeacherCourses = courseMapper.selectList(new LambdaQueryWrapper<Course>()
+            .eq(Course::getTeacherId, teacherId));
+
+        for (Course course : currentTeacherCourses) {
+            if (!selectedCourseIds.contains(course.getId())) {
+                course.setTeacherId(null);
+                course.setUpdatedAt(LocalDateTime.now());
+                courseMapper.updateById(course);
+            }
+        }
+
+        if (!selectedCourseIds.isEmpty()) {
+            List<Course> selectedCourses = courseMapper.selectList(new LambdaQueryWrapper<Course>()
+                .in(Course::getId, selectedCourseIds));
+
+            for (Course course : selectedCourses) {
+                course.setTeacherId(teacherId);
+                course.setUpdatedAt(LocalDateTime.now());
+                courseMapper.updateById(course);
+            }
+        }
+
+        return Result.success("课程绑定成功");
+    }
+
     private Long getUserId(UserDetails userDetails) {
         if (userDetails == null) {
             throw new RuntimeException("未登录");
@@ -120,5 +181,10 @@ public class CourseController {
         private String semester;
         private String grade;
         private String major;
+    }
+
+    @lombok.Data
+    public static class TeacherCourseAssignRequest {
+        private List<Long> courseIds;
     }
 }

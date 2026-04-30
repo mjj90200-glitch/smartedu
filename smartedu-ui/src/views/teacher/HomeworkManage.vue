@@ -4,17 +4,22 @@
       <template #header>
         <div class="card-header">
           <span>作业管理</span>
-          <el-button type="primary" @click="openPublishDialog">
-            <el-icon><Plus /></el-icon>
-            发布作业
-          </el-button>
+          <div class="header-actions">
+            <el-button @click="openCourseSelectorDialog">
+              选择课程
+            </el-button>
+            <el-button type="primary" @click="openPublishDialog">
+              <el-icon><Plus /></el-icon>
+              发布作业
+            </el-button>
+          </div>
         </div>
       </template>
 
       <!-- 筛选条件 -->
       <div class="filter-bar">
         <el-select v-model="filterCourse" placeholder="选择课程" style="width: 200px" clearable @change="loadHomeworkList">
-          <el-option v-for="course in courseList" :key="course.id" :label="course.courseName" :value="course.id" />
+          <el-option v-for="course in teacherCourseList" :key="course.id" :label="course.courseName" :value="course.id" />
         </el-select>
         <el-button @click="loadHomeworkList">
           <el-icon><Refresh /></el-icon>
@@ -87,7 +92,7 @@
         <el-form-item label="所属课程" prop="courseId">
           <div style="display: flex; gap: 10px;">
             <el-select v-model="publishForm.courseId" placeholder="请选择课程" style="flex: 1;">
-              <el-option v-for="course in courseList" :key="course.id" :label="course.courseName" :value="course.id" />
+              <el-option v-for="course in teacherCourseList" :key="course.id" :label="course.courseName" :value="course.id" />
             </el-select>
             <el-button type="primary" @click="showCreateCourseDialog = true">新建课程</el-button>
           </div>
@@ -206,6 +211,29 @@
       <template #footer>
         <el-button @click="showCreateCourseDialog = false">取消</el-button>
         <el-button type="primary" @click="handleCreateCourse" :loading="courseCreating">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="showCourseSelectorDialog" title="选择自己教授的课程" width="560px">
+      <div class="course-selector-tip">
+        先勾选当前教师负责的课程，作业发布和智学助手都会基于这里的课程列表工作。
+      </div>
+      <el-checkbox-group v-model="selectedTeacherCourseIds" class="course-selector-list">
+        <el-checkbox
+          v-for="course in availableCourseList"
+          :key="course.id"
+          :label="course.id"
+          class="course-selector-item"
+        >
+          <div class="course-option">
+            <span class="course-option-name">{{ course.courseName }}</span>
+            <span class="course-option-meta">{{ course.courseCode || '未填写课程代码' }}</span>
+          </div>
+        </el-checkbox>
+      </el-checkbox-group>
+      <template #footer>
+        <el-button @click="showCourseSelectorDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveTeacherCourses" :loading="savingTeacherCourses">保存课程</el-button>
       </template>
     </el-dialog>
 
@@ -370,13 +398,17 @@ import { Plus, Refresh, RefreshRight, MagicStick, Reading, Check, Edit, InfoFill
 import { courseApi, homeworkApi } from '@/api/teacher'
 
 // 数据
-const courseList = ref<any[]>([])
+const availableCourseList = ref<any[]>([])
+const teacherCourseList = ref<any[]>([])
 const homeworkList = ref<any[]>([])
 const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const filterCourse = ref('')
+const showCourseSelectorDialog = ref(false)
+const savingTeacherCourses = ref(false)
+const selectedTeacherCourseIds = ref<number[]>([])
 
 // 批改状态
 const autoGradingMap = ref<Record<number, boolean>>({})
@@ -429,9 +461,21 @@ const currentAnalysisHomework = ref<any>(null)
 const loadCourseList = async () => {
   try {
     const res = await courseApi.getList()
-    if (res.code === 200) courseList.value = res.data || []
+    if (res.code === 200) availableCourseList.value = res.data || []
   } catch (e) {
     console.error('加载课程失败:', e)
+  }
+}
+
+const loadTeacherCourseList = async () => {
+  try {
+    const res = await courseApi.getTeacherCourses()
+    if (res.code === 200) {
+      teacherCourseList.value = res.data || []
+      selectedTeacherCourseIds.value = teacherCourseList.value.map((course: any) => course.id)
+    }
+  } catch (e) {
+    console.error('加载教师课程失败:', e)
   }
 }
 
@@ -466,6 +510,10 @@ const loadHomeworkList = async () => {
 
 // 打开发布对话框
 const openPublishDialog = () => {
+  if (!teacherCourseList.value.length) {
+    ElMessage.warning('请先点击“选择课程”，勾选当前教师负责的课程')
+    return
+  }
   publishForm.title = ''
   publishForm.courseId = null
   publishForm.description = ''
@@ -474,6 +522,38 @@ const openPublishDialog = () => {
   publishForm.file = null
   fileList.value = []
   showPublishDialog.value = true
+}
+
+const openCourseSelectorDialog = async () => {
+  await Promise.all([loadCourseList(), loadTeacherCourseList()])
+  showCourseSelectorDialog.value = true
+}
+
+const saveTeacherCourses = async () => {
+  savingTeacherCourses.value = true
+  try {
+    const res = await courseApi.assignTeacherCourses(selectedTeacherCourseIds.value)
+    if (res.code === 200) {
+      ElMessage.success('课程已更新')
+      showCourseSelectorDialog.value = false
+      await loadTeacherCourseList()
+
+      if (publishForm.courseId && !selectedTeacherCourseIds.value.includes(publishForm.courseId)) {
+        publishForm.courseId = null
+      }
+      if (filterCourse.value && !selectedTeacherCourseIds.value.includes(Number(filterCourse.value))) {
+        filterCourse.value = ''
+      }
+
+      await loadHomeworkList()
+    } else {
+      ElMessage.error(res.message || '课程更新失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || '课程更新失败')
+  } finally {
+    savingTeacherCourses.value = false
+  }
 }
 
 // 文件选择
@@ -614,6 +694,7 @@ const handleCreateCourse = async () => {
       ElMessage.success('创建成功')
       showCreateCourseDialog.value = false
       await loadCourseList()
+      await loadTeacherCourseList()
       if (res.data) publishForm.courseId = res.data
     }
   } catch (e: any) {
@@ -746,6 +827,7 @@ const getFileUrl = (url: string) => {
 
 onMounted(() => {
   loadCourseList()
+  loadTeacherCourseList()
   loadHomeworkList()
 })
 </script>
@@ -756,6 +838,10 @@ onMounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+  .header-actions {
+    display: flex;
+    gap: 12px;
   }
   .filter-bar {
     display: flex;
@@ -777,6 +863,46 @@ onMounted(() => {
       text-decoration: underline;
     }
   }
+}
+
+.course-selector-tip {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f5f7fa;
+  color: #606266;
+  line-height: 1.6;
+}
+
+.course-selector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.course-selector-item {
+  margin-right: 0;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.course-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.course-option-name {
+  font-weight: 600;
+  color: #303133;
+}
+
+.course-option-meta {
+  font-size: 12px;
+  color: #909399;
 }
 
 // AI 解析审核抽屉样式

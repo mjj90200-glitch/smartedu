@@ -101,4 +101,10 @@ public interface VideoPostMapper extends BaseMapper<VideoPost> {
      */
     @Update("UPDATE video_post SET collection_count = GREATEST(0, collection_count - 1) WHERE id = #{id}")
     int decrementCollectionCount(@Param("id") Long id);
+    
+    /**
+     * 手动更新 deleted 字段（用于逻辑删除）
+     */
+    @Update("UPDATE video_post SET deleted = 1 WHERE id = #{id}")
+    int updateDeleted(@Param("id") Long id);
 }

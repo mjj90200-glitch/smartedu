@@ -194,21 +194,21 @@
       </template>
       <div class="quick-actions">
         <template v-if="userStore.isStudent()">
-          <el-button type="primary" @click="router.push('/student/knowledge-graph')" size="large">
-            <el-icon><Connection /></el-icon>
-            知识图谱
-          </el-button>
-          <el-button type="primary" @click="router.push('/student/learning-plan')" size="large">
-            <el-icon><Calendar /></el-icon>
-            学习计划
-          </el-button>
-          <el-button type="primary" @click="router.push('/student/error-analysis')" size="large">
-            <el-icon><TrendCharts /></el-icon>
-            错题分析
-          </el-button>
-          <el-button type="primary" @click="router.push('/student/qa-hall')" size="large">
+          <el-button type="primary" @click="router.push('/question-hall')" size="large">
             <el-icon><ChatDotRound /></el-icon>
             答疑大厅
+          </el-button>
+          <el-button type="primary" @click="router.push('/student/learning-analysis')" size="large">
+            <el-icon><DataAnalysis /></el-icon>
+            学情分析
+          </el-button>
+          <el-button type="primary" @click="router.push('/student/dashboard')" size="large">
+            <el-icon><DataBoard /></el-icon>
+            学习看板
+          </el-button>
+          <el-button type="primary" @click="router.push('/video-study')" size="large">
+            <el-icon><VideoPlay /></el-icon>
+            视频学习
           </el-button>
         </template>
         <template v-else-if="userStore.isTeacher()">
@@ -220,13 +220,13 @@
             <el-icon><DataAnalysis /></el-icon>
             学情分析
           </el-button>
-          <el-button type="primary" @click="router.push('/teacher/lesson-prep')" size="large">
-            <el-icon><Notebook /></el-icon>
-            智能备课
-          </el-button>
           <el-button type="primary" @click="router.push('/teacher/class-evaluation')" size="large">
             <el-icon><VideoPlay /></el-icon>
             课堂评估
+          </el-button>
+          <el-button type="primary" @click="router.push('/video-study')" size="large">
+            <el-icon><VideoPlay /></el-icon>
+            视频学习
           </el-button>
         </template>
         <template v-else-if="userStore.isAdmin()">
@@ -267,27 +267,61 @@
             </div>
           </template>
           <div class="dashboard-preview">
-            <div class="preview-stat">
-              <div class="stat-icon blue"><el-icon><Document /></el-icon></div>
-              <div class="stat-info">
-                <div class="stat-value">{{ userStore.isStudent() ? '3' : '12' }}</div>
-                <div class="stat-label">{{ userStore.isStudent() ? '待完成作业' : '待批改作业' }}</div>
+            <template v-if="userStore.isStudent()">
+              <div class="preview-note-item">
+                <div class="preview-note-head">
+                  <div class="stat-icon blue"><el-icon><Document /></el-icon></div>
+                  <div>
+                    <div class="preview-note-label">今日任务</div>
+                    <div class="preview-note-date">{{ todayLabel }}</div>
+                  </div>
+                </div>
+                <div class="preview-note-content">{{ todayCompletedText }}</div>
               </div>
-            </div>
-            <div class="preview-stat">
-              <div class="stat-icon green"><el-icon><Clock /></el-icon></div>
-              <div class="stat-info">
-                <div class="stat-value">{{ userStore.isStudent() ? '8.5h' : '24h' }}</div>
-                <div class="stat-label">{{ userStore.isStudent() ? '本周学习' : '本周授课' }}</div>
+              <div class="preview-note-item">
+                <div class="preview-note-head">
+                  <div class="stat-icon green"><el-icon><Clock /></el-icon></div>
+                  <div>
+                    <div class="preview-note-label">昨日任务</div>
+                    <div class="preview-note-date">{{ yesterdayLabel }}</div>
+                  </div>
+                </div>
+                <div class="preview-note-content">{{ yesterdayCompletedText }}</div>
               </div>
-            </div>
-            <div class="preview-stat">
-              <div class="stat-icon purple"><el-icon><Trophy /></el-icon></div>
-              <div class="stat-info">
-                <div class="stat-value">{{ userStore.isStudent() ? '85%' : '92%' }}</div>
-                <div class="stat-label">{{ userStore.isStudent() ? '平均正确率' : '班级平均分' }}</div>
+              <div class="preview-note-item">
+                <div class="preview-note-head">
+                  <div class="stat-icon purple"><el-icon><Trophy /></el-icon></div>
+                  <div>
+                    <div class="preview-note-label">今日 AI</div>
+                    <div class="preview-note-date">已使用工具</div>
+                  </div>
+                </div>
+                <div class="preview-note-content">{{ todayAiText }}</div>
               </div>
-            </div>
+            </template>
+            <template v-else>
+              <div class="preview-stat">
+                <div class="stat-icon blue"><el-icon><Document /></el-icon></div>
+                <div class="stat-info">
+                  <div class="stat-value">12</div>
+                  <div class="stat-label">待批改作业</div>
+                </div>
+              </div>
+              <div class="preview-stat">
+                <div class="stat-icon green"><el-icon><Clock /></el-icon></div>
+                <div class="stat-info">
+                  <div class="stat-value">24h</div>
+                  <div class="stat-label">本周授课</div>
+                </div>
+              </div>
+              <div class="preview-stat">
+                <div class="stat-icon purple"><el-icon><Trophy /></el-icon></div>
+                <div class="stat-info">
+                  <div class="stat-value">92%</div>
+                  <div class="stat-label">班级平均分</div>
+                </div>
+              </div>
+            </template>
           </div>
         </el-card>
       </el-col>
@@ -335,17 +369,14 @@ import { ElMessage } from 'element-plus'
 import { getCarouselNews, getListNews } from '@/api/news'
 import { getHomeVideos } from '@/api/video'
 import { getHomeRecommendList } from '@/api/homeRecommend'
+import { getLearningDashboardNote } from '@/api/student'
 import {
   Monitor,
   Refresh,
   Grid,
-  Connection,
-  Calendar,
-  TrendCharts,
   ChatDotRound,
   Document,
   DataAnalysis,
-  Notebook,
   VideoPlay,
   HomeFilled,
   DataBoard,
@@ -379,6 +410,17 @@ const carouselNews = ref<NewsItem[]>([])
 const listNews = ref<NewsItem[]>([])
 const loading = ref(false)
 
+interface LearningNotePreview {
+  date?: string
+  completedSummary?: string
+  pendingSummary?: string
+  aiToolSummary?: string
+  hasContent?: boolean
+}
+
+const todayNote = ref<LearningNotePreview | null>(null)
+const yesterdayNote = ref<LearningNotePreview | null>(null)
+
 // 推荐视频接口定义
 interface VideoItem {
   id: number
@@ -396,6 +438,54 @@ const homeVideos = ref<VideoItem[]>([])
 const featuredVideo = ref<VideoItem | null>(null)
 const gridVideos = ref<VideoItem[]>([])
 const videoLoading = ref(false)
+
+const formatShortDate = (date: Date) =>
+  `${date.getMonth() + 1}月${date.getDate()}日`
+
+const formatDateParam = (date: Date) => {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const today = computed(() => new Date())
+const yesterday = computed(() => {
+  const date = new Date()
+  date.setDate(date.getDate() - 1)
+  return date
+})
+
+const todayLabel = computed(() => formatShortDate(today.value))
+const yesterdayLabel = computed(() => formatShortDate(yesterday.value))
+
+const normalizePreviewText = (value?: string) => {
+  if (!value || !value.trim()) return '无'
+  return value.trim()
+}
+
+const todayCompletedText = computed(() => normalizePreviewText(todayNote.value?.completedSummary))
+const yesterdayCompletedText = computed(() => normalizePreviewText(yesterdayNote.value?.completedSummary))
+const todayAiText = computed(() => normalizePreviewText(todayNote.value?.aiToolSummary))
+
+const loadDashboardPreview = async () => {
+  if (!userStore.isStudent() || !userStore.userInfo?.id) return
+
+  try {
+    const userId = userStore.userInfo.id
+    const [todayRes, yesterdayRes] = await Promise.all([
+      getLearningDashboardNote(userId, formatDateParam(today.value)),
+      getLearningDashboardNote(userId, formatDateParam(yesterday.value))
+    ])
+
+    todayNote.value = todayRes.code === 200 ? todayRes.data : null
+    yesterdayNote.value = yesterdayRes.code === 200 ? yesterdayRes.data : null
+  } catch (error) {
+    console.error('加载学习看板预览失败:', error)
+    todayNote.value = null
+    yesterdayNote.value = null
+  }
+}
 
 // 获取默认图片（用于备用）
 const getDefaultImage = (id: number): string => {
@@ -508,7 +598,7 @@ const goToDashboard = () => {
   if (userStore.isStudent()) {
     router.push('/student/dashboard')
   } else if (userStore.isTeacher() || userStore.isAdmin()) {
-    router.push('/teacher/dashboard')
+    router.push('/teacher/homework')
   }
 }
 
@@ -659,6 +749,7 @@ const mockListNews: NewsItem[] = [
 onMounted(() => {
   refreshNews()
   loadHomeVideos()
+  loadDashboardPreview()
 })
 </script>
 
@@ -1308,16 +1399,22 @@ onMounted(() => {
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  overflow: hidden;
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.2);
   }
 
   .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-bottom: 1px solid rgba(102, 126, 234, 0.1);
 
     .header-title {
       display: flex;
@@ -1325,63 +1422,169 @@ onMounted(() => {
       gap: 8px;
       font-weight: 600;
       font-size: 16px;
-      color: #1a1a1a;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
 
       .header-icon {
         font-size: 20px;
         color: #667eea;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+    }
+
+    .el-button {
+      transition: all 0.3s ease;
+      color: #667eea;
+      font-weight: 500;
+      font-size: 14px;
+
+      &:hover {
+        color: #764ba2;
+        transform: translateX(4px);
       }
     }
   }
 }
 
 .dashboard-preview {
-  padding: 8px 0;
+  padding: 16px 20px;
+
+  .preview-note-item {
+    border: 1px solid rgba(102, 126, 234, 0.1);
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fcfcfd 0%, #f8f9fa 100%);
+    padding: 14px 16px 12px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(102, 126, 234, 0.1);
+    }
+  }
+
+  .preview-note-item + .preview-note-item {
+    margin-top: 12px;
+  }
+
+  .preview-note-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    &.blue {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    &.green {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    &.purple {
+      background: linear-gradient(135deg, #8e44ad 0%, #c0392b 100%);
+    }
+  }
+
+  .preview-note-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  .preview-note-date {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #7b8190;
+    font-weight: 500;
+  }
+
+  .preview-note-content {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #374151;
+    min-height: 44px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding-left: 48px;
+  }
 
   .preview-stat {
     display: flex;
     align-items: center;
     gap: 16px;
     padding: 12px 0;
+    border-bottom: 1px solid rgba(102, 126, 234, 0.05);
+
+    &:last-child {
+      border-bottom: none;
+    }
 
     .stat-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      color: #fff;
-
-      &.blue {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      }
-
-      &.green {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      }
-
-      &.purple {
-        background: linear-gradient(135deg, #8e44ad 0%, #c0392b 100%);
-      }
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
     }
 
     .stat-info {
       flex: 1;
 
       .stat-value {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 700;
-        color: #1a1a1a;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         margin-bottom: 4px;
       }
 
       .stat-label {
         font-size: 13px;
-        color: #909399;
+        color: #7b8190;
+        font-weight: 500;
       }
     }
+  }
+}
+
+.notice-card {
+  .el-timeline {
+    padding: 0 20px 16px;
   }
 }
 
@@ -1389,10 +1592,22 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #fcfcfd 0%, #f8f9fa 100%);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  margin-bottom: 10px;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+  }
 
   .notice-title {
-    font-size: 14px;
-    color: #303133;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1a1a1a;
+    flex: 1;
   }
 }
 </style>

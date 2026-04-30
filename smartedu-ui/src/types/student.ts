@@ -11,13 +11,68 @@ export interface DashboardStats {
   suggestions: LearningSuggestion[]
 }
 
-// 知识图谱预览
-export interface KnowledgeGraphPreview {
-  totalKnowledgePoints: number
-  masteredCount: number
-  learningCount: number
-  notStartedCount: number
-  weakPoints: WeakKnowledgePoint[]
+export interface LearningDashboardData {
+  startDate: string
+  endDate: string
+  selectedDate: string
+  summary: LearningDashboardSummary
+  heatmapDays: LearningHeatmapDay[]
+  selectedDay: LearningDayDetail
+  selectedNote: LearningDailyNote
+}
+
+export interface LearningDashboardSummary {
+  activeDays: number
+  completedTaskCount: number
+  gradedEventCount: number
+  aiUsageCount: number
+  unreadReminderCount: number
+}
+
+export interface LearningHeatmapDay {
+  date: string
+  activityLevel: number
+  completedTaskCount: number
+  aiUsageCount: number
+  reminderCount: number
+  gradedEventCount: number
+  totalEventCount: number
+  timelineEvents: LearningTimelineEvent[]
+}
+
+export interface LearningDayDetail {
+  date: string
+  completedTaskCount: number
+  aiUsageCount: number
+  reminderCount: number
+  gradedEventCount: number
+  totalEventCount: number
+  timelineEvents: LearningTimelineEvent[]
+}
+
+export interface LearningTimelineEvent {
+  id: string
+  time: string
+  type: 'task' | 'ai_usage' | 'reminder'
+  status: 'completed' | 'graded' | 'read' | 'unread' | string
+  title: string
+  courseName?: string
+  subtitle?: string
+  detail?: string
+  aiModel?: string
+  actionSummary?: string
+  resultSummary?: string
+  scoreLabel?: string
+}
+
+export interface LearningDailyNote {
+  id?: number
+  date?: string
+  completedSummary: string
+  pendingSummary: string
+  aiToolSummary: string
+  reflection: string
+  hasContent: boolean
 }
 
 // 薄弱知识点
@@ -46,93 +101,9 @@ export interface LearningSuggestion {
   priority: 'HIGH' | 'MEDIUM' | 'LOW'
 }
 
-// 知识图谱节点
-export interface KnowledgeGraphNode {
-  id: number
-  name: string
-  mastery: number
-  status: 'mastered' | 'learning' | 'not-started' | 'weak'
-  x?: number
-  y?: number
-}
 
-// 知识图谱连线
-export interface KnowledgeGraphLink {
-  source: number
-  target: number
-  relation?: string
-}
 
-// 知识图谱数据
-export interface KnowledgeGraphData {
-  nodes: KnowledgeGraphNode[]
-  links: KnowledgeGraphLink[]
-}
 
-// 学习计划
-export interface LearningPlan {
-  id: number
-  title: string
-  courseName: string
-  courseId: number
-  startDate: string
-  endDate: string
-  progress: number
-  status: number
-  dailyTasks?: DailyTask[]
-}
-
-// 每日任务
-export interface DailyTask {
-  id: number
-  planId: number
-  day: number
-  title: string
-  description: string
-  completed: boolean
-  knowledgePointIds: number[]
-}
-
-// 错题分析
-export interface ErrorAnalysis {
-  totalErrorCount: number
-  pendingReviewCount: number
-  reviewedCount: number
-  masteredCount: number
-  errorTypeDistribution: ErrorTypeDistribution[]
-  knowledgePointDistribution: KnowledgePointDistribution[]
-  weakPoints: WeakKnowledgePoint[]
-}
-
-// 错误类型分布
-export interface ErrorTypeDistribution {
-  type: string
-  count: number
-  percentage: number
-}
-
-// 知识点分布
-export interface KnowledgePointDistribution {
-  knowledgePointId: number
-  knowledgePointName: string
-  errorCount: number
-  mastery: number
-}
-
-// 错题记录
-export interface ErrorQuestion {
-  id: number
-  questionId: number
-  questionTitle: string
-  knowledgePoint: string
-  knowledgePointId: number
-  errorType: string
-  errorReason?: string
-  reviewStatus: number
-  reviewCount: number
-  nextReviewDate?: string
-  createdAt: string
-}
 
 // 问题详情
 export interface QuestionDetail {

@@ -1,12 +1,16 @@
 package com.smartedu.controller;
 
 import com.smartedu.common.result.Result;
+import com.smartedu.dto.StudentLearningNoteRequest;
 import com.smartedu.security.JwtAuthenticationToken;
+import com.smartedu.service.StudentLearningAnalysisService;
+import com.smartedu.service.StudentLearningDashboardService;
 import com.smartedu.service.StudentDashboardService;
 import com.smartedu.vo.DashboardStatsVO;
 import com.smartedu.vo.ErrorAnalysisVO;
 import com.smartedu.vo.KnowledgeGraphVO;
 import com.smartedu.vo.LearningPlanVO;
+import com.smartedu.vo.StudentLearningDashboardVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
 
 /**
  * 学生学习控制器
@@ -25,9 +30,15 @@ import java.util.List;
 public class StudentLearningController {
 
     private final StudentDashboardService studentDashboardService;
+    private final StudentLearningAnalysisService studentLearningAnalysisService;
+    private final StudentLearningDashboardService studentLearningDashboardService;
 
-    public StudentLearningController(StudentDashboardService studentDashboardService) {
+    public StudentLearningController(StudentDashboardService studentDashboardService,
+                                     StudentLearningAnalysisService studentLearningAnalysisService,
+                                     StudentLearningDashboardService studentLearningDashboardService) {
         this.studentDashboardService = studentDashboardService;
+        this.studentLearningAnalysisService = studentLearningAnalysisService;
+        this.studentLearningDashboardService = studentLearningDashboardService;
     }
 
     @GetMapping("/dashboard/stats")
@@ -52,6 +63,79 @@ public class StudentLearningController {
         }
         DashboardStatsVO stats = studentDashboardService.getDashboardStats(userId);
         return Result.success("获取成功", stats);
+    }
+
+    @GetMapping("/dashboard")
+    @Operation(summary = "获取学生学习看板")
+    public Result<StudentLearningDashboardVO> getLearningDashboard(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Integer days) {
+        if (userId == null) {
+            try {
+                org.springframework.security.core.Authentication authentication =
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (authentication instanceof JwtAuthenticationToken jwtToken) {
+                    userId = jwtToken.getUserId();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (userId == null) {
+            return Result.error("未登录或用户 ID 为空");
+        }
+        return Result.success("获取成功", studentLearningDashboardService.getDashboard(userId, days));
+    }
+
+    @PostMapping("/dashboard/note")
+    @Operation(summary = "保存学生学习笔记")
+    public Result<StudentLearningDashboardVO.DailyNoteVO> saveLearningNote(
+            @RequestBody StudentLearningNoteRequest request,
+            @RequestParam(required = false) Long userId) {
+        if (userId == null) {
+            try {
+                org.springframework.security.core.Authentication authentication =
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (authentication instanceof JwtAuthenticationToken jwtToken) {
+                    userId = jwtToken.getUserId();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (userId == null) {
+            return Result.error("未登录或用户 ID 为空");
+        }
+        LocalDate date = request.getDate() == null || request.getDate().isBlank()
+            ? LocalDate.now()
+            : LocalDate.parse(request.getDate());
+        return Result.success("保存成功", studentLearningDashboardService.saveDailyNote(
+            userId,
+            date,
+            request.getCompletedSummary(),
+            request.getPendingSummary(),
+            request.getAiToolSummary(),
+            request.getReflection()
+        ));
+    }
+
+    @GetMapping("/dashboard/note")
+    @Operation(summary = "获取学生指定日期学习笔记")
+    public Result<StudentLearningDashboardVO.DailyNoteVO> getLearningNote(
+            @RequestParam String date,
+            @RequestParam(required = false) Long userId) {
+        if (userId == null) {
+            try {
+                org.springframework.security.core.Authentication authentication =
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (authentication instanceof JwtAuthenticationToken jwtToken) {
+                    userId = jwtToken.getUserId();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (userId == null) {
+            return Result.error("未登录或用户 ID 为空");
+        }
+        return Result.success("获取成功", studentLearningDashboardService.getDailyNote(userId, LocalDate.parse(date)));
     }
 
     @GetMapping("/knowledge-graph")
@@ -380,5 +464,53 @@ public class StudentLearningController {
             @RequestParam(required = false) Integer count) {
         // TODO: 返回推荐题目
         return Result.success("获取成功", new ArrayList<>());
+    }
+
+    @GetMapping("/analysis")
+    @Operation(summary = "获取学生学情分析数据")
+    @Parameter(name = "courseId", description = "课程 ID", example = "1")
+    public Result<Object> getStudentAnalysis(
+            @RequestParam Long courseId) {
+        Long studentId = getCurrentUserId();
+        return Result.success("获取成功", studentLearningAnalysisService.getStudentAnalysis(studentId, courseId));
+    }
+
+    @GetMapping("/courses")
+    @Operation(summary = "获取当前学生可查看的课程")
+    public Result<Object> getStudentCourses() {
+        Long studentId = getCurrentUserId();
+        return Result.success("获取成功", studentLearningAnalysisService.getStudentCourses(studentId));
+    }
+
+    @GetMapping("/reminders")
+    @Operation(summary = "获取老师提醒列表")
+    public Result<Object> getReminders(@RequestParam(required = false) Long courseId) {
+        Long studentId = getCurrentUserId();
+        return Result.success("获取成功", studentLearningAnalysisService.getReminders(studentId, courseId));
+    }
+
+    @PostMapping("/reminders/{id}/read")
+    @Operation(summary = "标记提醒为已读")
+    public Result<Void> markReminderAsRead(@PathVariable Long id) {
+        Long studentId = getCurrentUserId();
+        studentLearningAnalysisService.markReminderAsRead(studentId, id);
+        return Result.success("标记成功");
+    }
+
+    @PostMapping("/reminders/read-all")
+    @Operation(summary = "标记所有提醒为已读")
+    public Result<Void> markAllRemindersAsRead(@RequestParam(required = false) Long courseId) {
+        Long studentId = getCurrentUserId();
+        studentLearningAnalysisService.markAllRemindersAsRead(studentId, courseId);
+        return Result.success("标记成功");
+    }
+
+    private Long getCurrentUserId() {
+        org.springframework.security.core.Authentication authentication =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof JwtAuthenticationToken jwtToken) {
+            return jwtToken.getUserId();
+        }
+        throw new RuntimeException("未登录");
     }
 }

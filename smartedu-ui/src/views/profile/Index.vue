@@ -335,13 +335,9 @@ const handleCropDialogOpened = async () => {
       autoCropArea: 0.8,
       responsive: true,
       background: false,
+      // 启用实时预览
+      preview: '.preview-avatar'
     })
-
-    // 手动设置预览元素
-    const previewEl = document.querySelector('.preview-avatar')
-    if (previewEl) {
-      cropperInstance.value.setPreview(previewEl)
-    }
   }
 }
 
@@ -358,8 +354,8 @@ const handleCropDialogClosed = () => {
 
 // 处理裁剪确认
 const handleCropConfirm = () => {
-  if (!cropperInstance.value) {
-    ElMessage.error('裁剪工具未初始化')
+  if (!cropperInstance.value || cropping.value) {
+    ElMessage.error('裁剪工具未初始化或正在处理')
     return
   }
 
@@ -388,7 +384,7 @@ const handleCropConfirm = () => {
     }
 
     const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
-    uploadAvatarFile(file).then(() => {
+    uploadAvatarFile(file).finally(() => {
       cropDialogVisible.value = false
     })
   }, 'image/jpeg', 0.9)
@@ -396,6 +392,11 @@ const handleCropConfirm = () => {
 
 // 上传头像文件
 const uploadAvatarFile = async (file: File) => {
+  if (updateLoading.value) {
+    console.warn('上传正在进行中，请勿重复操作')
+    return
+  }
+
   updateLoading.value = true
   try {
     const formDataUpload = new FormData()

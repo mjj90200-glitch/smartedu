@@ -47,23 +47,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '学习看板', icon: 'DataAnalysis' }
       },
       {
-        path: 'knowledge-graph',
-        name: 'KnowledgeGraph',
-        component: () => import('@/views/student/KnowledgeGraph.vue'),
-        meta: { title: '知识图谱', icon: 'Connection' }
+        path: 'learning-analysis',
+        name: 'StudentLearningAnalysis',
+        component: () => import('@/views/student/LearningAnalysis.vue'),
+        meta: { title: '学情分析', icon: 'TrendCharts' }
       },
-      {
-        path: 'learning-plan',
-        name: 'LearningPlan',
-        component: () => import('@/views/student/LearningPlan.vue'),
-        meta: { title: '学习计划', icon: 'Calendar' }
-      },
-      {
-        path: 'error-analysis',
-        name: 'ErrorAnalysis',
-        component: () => import('@/views/student/ErrorAnalysis.vue'),
-        meta: { title: '错题分析', icon: 'TrendCharts' }
-      },
+
       {
         path: 'homework',
         name: 'StudentHomework',
@@ -71,30 +60,24 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '我的作业', icon: 'Document' }
       },
       {
-        path: 'qa-hall',
-        name: 'QAHall',
-        component: () => import('@/views/student/QAHall.vue'),
-        meta: { title: '答疑大厅', icon: 'ChatDotRound' }
+        path: 'assistant',
+        name: 'StudentAssistant',
+        component: () => import('@/views/shared/SmartAssistant.vue'),
+        meta: { title: '智学助手', icon: 'ChatDotRound' }
       }
     ]
   },
   {
     path: '/teacher',
     component: () => import('@/layout/index.vue'),
-    redirect: '/teacher/dashboard',
+    redirect: '/teacher/class-evaluation',
     meta: { title: '教师端', requiresAuth: true, roles: ['TEACHER', 'ADMIN'] },
     children: [
       {
-        path: 'dashboard',
-        name: 'TeacherDashboard',
-        component: () => import('@/views/teacher/Dashboard.vue'),
-        meta: { title: '教学看板', icon: 'DataAnalysis' }
-      },
-      {
-        path: 'homework',
-        name: 'HomeworkManage',
-        component: () => import('@/views/teacher/HomeworkManage.vue'),
-        meta: { title: '作业管理', icon: 'Document' }
+        path: 'class-evaluation',
+        name: 'ClassEvaluation',
+        component: () => import('@/views/teacher/ClassEvaluation.vue'),
+        meta: { title: '课堂评估', icon: 'VideoPlay' }
       },
       {
         path: 'analysis',
@@ -103,16 +86,16 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '学情分析', icon: 'TrendCharts' }
       },
       {
-        path: 'lesson-prep',
-        name: 'LessonPrep',
-        component: () => import('@/views/teacher/LessonPrep.vue'),
-        meta: { title: '智能备课', icon: 'Notebook' }
+        path: 'homework',
+        name: 'HomeworkManage',
+        component: () => import('@/views/teacher/HomeworkManage.vue'),
+        meta: { title: '作业管理', icon: 'Document' }
       },
       {
-        path: 'class-evaluation',
-        name: 'ClassEvaluation',
-        component: () => import('@/views/teacher/ClassEvaluation.vue'),
-        meta: { title: '课堂评估', icon: 'VideoPlay' }
+        path: 'assistant',
+        name: 'TeacherAssistant',
+        component: () => import('@/views/shared/SmartAssistant.vue'),
+        meta: { title: '智学助手', icon: 'ChatDotRound' }
       }
     ]
   },
@@ -132,7 +115,7 @@ const routes: RouteRecordRaw[] = [
         path: 'video-audit',
         name: 'VideoAudit',
         component: () => import('@/views/admin/VideoAudit.vue'),
-        meta: { title: '视频审核', icon: 'VideoPlay' }
+        meta: { title: '视频管理', icon: 'VideoPlay' }
       },
       {
         path: 'home-recommend',

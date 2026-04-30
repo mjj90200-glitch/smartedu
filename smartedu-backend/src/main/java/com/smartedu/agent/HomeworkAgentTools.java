@@ -1,19 +1,31 @@
 package com.smartedu.agent;
 
-import com.smartedu.dto.HomeworkDTO;
-import com.smartedu.service.HomeworkService;
-import com.smartedu.service.QuestionImportService;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.smartedu.entity.Course;
+import com.smartedu.entity.Homework;
+import com.smartedu.entity.HomeworkSubmission;
+import com.smartedu.mapper.CourseMapper;
+import com.smartedu.mapper.HomeworkMapper;
+import com.smartedu.mapper.HomeworkSubmissionMapper;
+import com.smartedu.service.QuickHomeworkService;
 import com.smartedu.service.StudentHomeworkService;
+import com.smartedu.vo.StudentHomeworkVO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * 作业 Agent 工具箱
@@ -27,15 +39,21 @@ public class HomeworkAgentTools {
     private static final Logger logger = LoggerFactory.getLogger(HomeworkAgentTools.class);
 
     private final StudentHomeworkService studentHomeworkService;
-    private final HomeworkService homeworkService;
-    private final QuestionImportService questionImportService;
+    private final QuickHomeworkService quickHomeworkService;
+    private final HomeworkMapper homeworkMapper;
+    private final HomeworkSubmissionMapper submissionMapper;
+    private final CourseMapper courseMapper;
 
     public HomeworkAgentTools(StudentHomeworkService studentHomeworkService,
-                              HomeworkService homeworkService,
-                              QuestionImportService questionImportService) {
+                              QuickHomeworkService quickHomeworkService,
+                              HomeworkMapper homeworkMapper,
+                              HomeworkSubmissionMapper submissionMapper,
+                              CourseMapper courseMapper) {
         this.studentHomeworkService = studentHomeworkService;
-        this.homeworkService = homeworkService;
-        this.questionImportService = questionImportService;
+        this.quickHomeworkService = quickHomeworkService;
+        this.homeworkMapper = homeworkMapper;
+        this.submissionMapper = submissionMapper;
+        this.courseMapper = courseMapper;
     }
 
     /**
@@ -107,35 +125,21 @@ public class HomeworkAgentTools {
                 return result;
             }
 
-            // 解析文档导入题目
             MultipartFile docFile = new UrlBackedMultipartFile(request.fileUrl);
-            Map<String, Object> importResult = questionImportService.importQuestions(docFile, request.courseId, teacherId);
-
-            // 创建作业
-            HomeworkDTO dto = new HomeworkDTO();
-            dto.setTitle(request.title);
-            dto.setDescription(request.description != null ? request.description : "自动创建的作业");
-            dto.setCourseId(request.courseId);
-
-            if (request.endTime != null && !request.endTime.isEmpty()) {
-                try {
-                    dto.setEndTime(LocalDateTime.parse(request.endTime.replace("Z", "")));
-                } catch (Exception e) {
-                    logger.warn("解析截止时间失败，使用默认值：{}", request.endTime);
-                }
-            }
-
-            if (dto.getEndTime() == null) {
-                dto.setEndTime(LocalDateTime.now().plusDays(7));
-            }
-
-            Long homeworkId = homeworkService.createHomework(dto, teacherId);
+            Map<String, Object> publishResult = quickHomeworkService.quickPublish(
+                docFile,
+                request.title,
+                request.courseId,
+                request.description != null ? request.description : "由智学助手发布的作业",
+                null,
+                request.endTime,
+                teacherId
+            );
 
             result.put("success", true);
             result.put("message", "作业发布成功");
-            result.put("homeworkId", homeworkId);
-            result.put("questionsImported", importResult.get("success"));
-            result.put("title", request.title);
+            result.put("homeworkId", publishResult.get("id"));
+            result.put("title", publishResult.getOrDefault("title", request.title));
 
             return result;
         } catch (Exception e) {
@@ -209,30 +213,143 @@ public class HomeworkAgentTools {
 
         @Override
         public boolean isEmpty() {
-            return false;
+            return getSize() <= 0;
         }
 
         @Override
         public long getSize() {
-            return 0;
+            return resolveFile().length();
         }
 
         @Override
         public byte[] getBytes() throws IOException {
-            // 实际使用时需要从 URL 读取文件内容
-            throw new IOException("UrlBackedMultipartFile 不支持直接读取字节，请使用文件路径");
+            return java.nio.file.Files.readAllBytes(resolveFile().toPath());
         }
 
         @Override
         public void transferTo(java.io.File dest) throws IOException {
-            // 实际使用时需要从 URL 读取文件内容并写入目标文件
-            throw new IOException("UrlBackedMultipartFile 不支持直接传输，请使用文件路径");
+            java.nio.file.Files.copy(resolveFile().toPath(), dest.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
 
         @Override
-        public java.io.InputStream getInputStream() throws IOException {
-            // 实际使用时需要从 URL 读取文件内容
-            throw new IOException("UrlBackedMultipartFile 不支持直接读取流，请使用文件路径");
+        public InputStream getInputStream() throws IOException {
+            return new FileInputStream(resolveFile());
         }
+
+        private File resolveFile() {
+            String normalizedPath = fileUrl.startsWith("/") ? fileUrl : "/" + fileUrl;
+            File file = new File(System.getProperty("user.dir") + normalizedPath);
+            if (!file.exists()) {
+                throw new RuntimeException("找不到已上传的文件：" + fileUrl);
+            }
+            return file;
+        }
+    }
+
+    public List<StudentHomeworkVO> getPendingHomework(Long studentId) {
+        List<StudentHomeworkVO> pendingList = new ArrayList<>();
+        if (studentId == null) {
+            return pendingList;
+        }
+
+        List<Homework> homeworkList = homeworkMapper.selectList(new LambdaQueryWrapper<Homework>()
+            .eq(Homework::getStatus, 1)
+            .orderByAsc(Homework::getEndTime)
+            .orderByDesc(Homework::getCreatedAt));
+
+        LocalDateTime now = LocalDateTime.now();
+        for (Homework homework : homeworkList) {
+            if (homework.getStartTime() != null && now.isBefore(homework.getStartTime())) {
+                continue;
+            }
+
+            HomeworkSubmission submission = submissionMapper.selectOne(new LambdaQueryWrapper<HomeworkSubmission>()
+                .eq(HomeworkSubmission::getHomeworkId, homework.getId())
+                .eq(HomeworkSubmission::getUserId, studentId)
+                .orderByDesc(HomeworkSubmission::getSubmitTime)
+                .last("LIMIT 1"));
+
+            if (submission != null) {
+                continue;
+            }
+
+            StudentHomeworkVO vo = new StudentHomeworkVO();
+            vo.setId(homework.getId());
+            vo.setTitle(homework.getTitle());
+            vo.setDescription(homework.getDescription());
+            vo.setCourseId(homework.getCourseId());
+            vo.setStartTime(homework.getStartTime());
+            vo.setEndTime(homework.getEndTime());
+            vo.setAttachmentUrl(homework.getAttachmentUrl());
+            vo.setAttachmentName(homework.getAttachmentName());
+            vo.setStatus(homework.getEndTime() != null && now.isAfter(homework.getEndTime()) ? 2 : 1);
+            vo.setSubmitStatus(0);
+
+            Course course = courseMapper.selectById(homework.getCourseId());
+            if (course != null) {
+                vo.setCourseName(course.getCourseName());
+            }
+            pendingList.add(vo);
+        }
+
+        pendingList.sort(Comparator
+            .comparing((StudentHomeworkVO item) -> item.getStatus() != null && item.getStatus() == 2 ? 1 : 0)
+            .thenComparing(StudentHomeworkVO::getEndTime, Comparator.nullsLast(Comparator.naturalOrder())));
+        return pendingList;
+    }
+
+    public List<Course> getTeacherCourses(Long teacherId) {
+        if (teacherId == null) {
+            return List.of();
+        }
+        return courseMapper.selectList(new LambdaQueryWrapper<Course>()
+            .eq(Course::getTeacherId, teacherId)
+            .eq(Course::getStatus, 1)
+            .orderByAsc(Course::getCourseName));
+    }
+
+    public String formatPendingHomework(List<StudentHomeworkVO> pendingList) {
+        if (pendingList == null || pendingList.isEmpty()) {
+            return "当前没有待提交的作业。";
+        }
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        StringBuilder builder = new StringBuilder("我查到了你当前还没有提交的作业：\n");
+        for (StudentHomeworkVO item : pendingList) {
+            builder.append("- 作业ID ")
+                .append(item.getId())
+                .append("｜")
+                .append(item.getTitle());
+            if (item.getCourseName() != null) {
+                builder.append("｜课程：").append(item.getCourseName());
+            }
+            if (item.getEndTime() != null) {
+                builder.append("｜截止：").append(item.getEndTime().format(formatter));
+            }
+            if (item.getStatus() != null && item.getStatus() == 2) {
+                builder.append("｜已截止");
+            }
+            builder.append('\n');
+        }
+        return builder.toString().trim();
+    }
+
+    public String formatTeacherCourses(List<Course> courseList) {
+        if (courseList == null || courseList.isEmpty()) {
+            return "当前账号下还没有可用课程。";
+        }
+
+        StringBuilder builder = new StringBuilder("你当前可以发布作业的课程有：\n");
+        for (Course course : courseList) {
+            builder.append("- 课程ID ")
+                .append(course.getId())
+                .append("｜")
+                .append(course.getCourseName());
+            if (course.getSemester() != null && !course.getSemester().isBlank()) {
+                builder.append("｜学期：").append(course.getSemester());
+            }
+            builder.append('\n');
+        }
+        return builder.toString().trim();
     }
 }

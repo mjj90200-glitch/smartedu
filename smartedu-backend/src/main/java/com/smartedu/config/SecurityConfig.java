@@ -156,8 +156,8 @@ public class SecurityConfig {
                 .requestMatchers("/home-recommend/list").permitAll()
                 // ========== 放行开发测试接口（生产环境应删除）==========
                 .requestMatchers("/news/manual-update-dev").permitAll()
-                // ========== AI Agent 接口：需要认证（所有登录用户）==========
-                .requestMatchers("/ai/**").authenticated()
+                // ========== AI Agent 接口：暂时允许公开访问（测试用）==========
+                .requestMatchers("/ai/**").permitAll()
                 // ========== 作业模块：需要 TEACHER/STUDENT/ADMIN 角色 ==========
                 // 使用 hasAuthority 匹配完整的 authority（包括 ROLE_ 前缀）
                 .requestMatchers("/homework/**").hasAnyAuthority("ROLE_TEACHER", "ROLE_STUDENT", "ROLE_ADMIN")

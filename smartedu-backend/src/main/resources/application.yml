@@ -15,11 +15,15 @@ spring:
     lazy-initialization: true
   ai:
     openai:
-      api-key: ${AI_API_KEY:sk-sp-6a4265766e014f378cb68088d4541e87}
-      base-url: ${AI_BASE_URL:https://coding.dashscope.aliyuncs.com}
+      api-key: ${AI_API_KEY:ark-4ed8d0de-fe13-45d4-8c28-51975ab4506f-60acf}
+      base-url: ${AI_BASE_URL:https://ark.cn-beijing.volces.com/api/coding/v3}
+      # 确保添加此配置
+      enabled: true
+      # 连接超时设置
+      timeout: 30000
       chat:
         options:
-          model: ${AI_MODEL:qwen3.5-plus}
+          model: ${AI_MODEL:doubao-seed-2.0-pro}
           temperature: 0.7
       # 禁用不需要的功能
       audio:
@@ -42,7 +46,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/smartedu_platform?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:your_password}
+    password: ${SPRING_DATASOURCE_PASSWORD:050914Mjj}
 
   # Jackson 配置
   jackson:
@@ -145,13 +149,14 @@ news:
     cron: "0 0 2 * * ?"
 
 # ============================================================
-# 阿里云百炼 AI 配置（Coding Plan）
+# 火山 Coding Plan AI 配置
 # ============================================================
 ai:
   bailian:
-    # API Key（从阿里云百炼控制台获取）
-    api-key: sk-sp-6a4265766e014f378cb68088d4541e87
-    # 模型名称（Coding Plan 支持的模型）
-    model: qwen3.5-plus
-    # OpenAI 兼容端点（Coding Plan 专用）- 完整的 chat/completions 路径
-    endpoint: https://coding.dashscope.aliyuncs.com/v1
+    # API Key（从火山引擎控制台获取）
+    api-key: ark-4ed8d0de-fe13-45d4-8c28-51975ab4506f-60acf
+    # 模型名称（火山 Coding Plan 支持的模型）
+    model: doubao-seed-2.0-pro
+    # OpenAI 兼容端点（火山 Coding Plan 专用）
+    endpoint: https://ark.cn-beijing.volces.com/api/coding/v3
+

@@ -50,6 +50,13 @@ export function getPendingVideos(params: { page?: number; size?: number }) {
 }
 
 /**
+ * 获取已审核通过的视频列表（管理员）
+ */
+export function getApprovedVideos(params: { page?: number; size?: number; keyword?: string }) {
+  return request.get('/video/list', { params })
+}
+
+/**
  * 审核视频（管理员）
  */
 export function auditVideo(data: { videoId: number; status: number; rejectReason?: string }) {
@@ -60,5 +67,11 @@ export function auditVideo(data: { videoId: number; status: number; rejectReason
  * 删除视频（管理员）
  */
 export function deleteVideo(id: number) {
-  return request.delete(`/video/${id}`)
+  console.log('调用删除视频API，ID:', id)
+  console.log('请求URL:', `/video/${id}`)
+  // 确保使用正确的 DELETE 请求
+  return request({
+    url: `/video/${id}`,
+    method: 'delete'
+  })
 }

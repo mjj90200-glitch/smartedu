@@ -175,11 +175,8 @@ public class VideoPostService {
      */
     @Transactional
     public void deleteVideo(Long id) {
-        VideoPost video = videoPostMapper.selectById(id);
-        if (video != null) {
-            video.setDeleted(1);
-            videoPostMapper.updateById(video);
-        }
+        // 使用自定义的 updateDeleted 方法来更新 deleted 字段
+        videoPostMapper.updateDeleted(id);
     }
 
     /**

@@ -64,6 +64,10 @@
                   </el-icon>
                   {{ video.collectionCount || 0 }}
                 </span>
+                <span class="delete-btn" v-if="isAdmin" @click.stop="handleDelete(video)">
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </span>
               </div>
             </div>
           </el-card>
@@ -148,12 +152,17 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed } from 'vue'
 import { useUserStore } from '@/store/modules/user'
-import { ElMessage } from 'element-plus'
-import { getVideoList, submitVideo, toggleCollection } from '@/api/video'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getVideoList, submitVideo, toggleCollection, deleteVideo } from '@/api/video'
 import { VideoPlay, Upload, Search, View, Star, StarFilled, Plus, Delete } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules, UploadProps } from 'element-plus'
 
 const userStore = useUserStore()
+
+// 检查用户是否是管理员
+const isAdmin = computed(() => {
+  return userStore.isLoggedIn && userStore.userInfo?.role === 'ADMIN'
+})
 
 // 上传配置
 const uploadUrl = '/api/common/upload/cover'
@@ -356,6 +365,37 @@ const handleSubmit = async () => {
   })
 }
 
+// 删除视频
+const handleDelete = async (video: VideoItem) => {
+  try {
+    await ElMessageBox.confirm(`确定删除视频"${video.title}"吗？此操作不可恢复。`, '确认删除', {
+      type: 'warning'
+    })
+    
+    console.log('删除视频ID:', video.id)
+    console.log('删除前视频列表长度:', videoList.value.length)
+    
+    const res = await deleteVideo(video.id)
+    if (res.code === 200) {
+      ElMessage.success('删除成功')
+      
+      // 手动从视频列表中移除被删除的视频
+      videoList.value = videoList.value.filter(item => item.id !== video.id)
+      console.log('删除后视频列表长度:', videoList.value.length)
+      
+      // 刷新视频列表以确保数据一致性
+      setTimeout(() => {
+        loadVideos()
+      }, 100)
+    } else {
+      ElMessage.error(res.message || '删除失败')
+    }
+  } catch (error) {
+    console.error('删除视频失败:', error)
+    // 用户取消
+  }
+}
+
 onMounted(() => {
   loadVideos()
 })
@@ -508,7 +548,8 @@ onMounted(() => {
 
       .video-meta {
         display: flex;
-        justify-content: flex-end;
+        justify-content: space-between;
+        align-items: center;
 
         .collection-btn {
           display: flex;
@@ -524,6 +565,20 @@ onMounted(() => {
           }
 
           .collected {
+            color: #f56c6c;
+          }
+        }
+
+        .delete-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 12px;
+          color: #909399;
+          cursor: pointer;
+          transition: color 0.2s;
+
+          &:hover {
             color: #f56c6c;
           }
         }

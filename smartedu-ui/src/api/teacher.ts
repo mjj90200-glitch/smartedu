@@ -6,6 +6,8 @@ export const courseApi = {
   getList: () => get('/course/list'),
   // 获取教师的课程
   getTeacherCourses: () => get('/course/teacher'),
+  // 绑定当前教师教授的课程
+  assignTeacherCourses: (courseIds: number[]) => post('/course/teacher/assign', { courseIds }),
   // 获取课程详情
   getDetail: (id: number) => get(`/course/${id}`),
   // 创建课程
@@ -142,6 +144,79 @@ export const homeworkApi = {
   retryAiAnalysis: (homeworkId: number) => post(`/teacher/homework/${homeworkId}/ai-analysis/retry`)
 }
 
+export const homeworkAnalysisApi = {
+  getOverview: (courseId: number) => get('/teacher/homework/analysis/overview', { courseId }),
+  getStudentDetail: (studentId: number, courseId: number) =>
+    get(`/teacher/homework/analysis/student/${studentId}`, { courseId }),
+  remindStudents: (data: { courseId: number; studentIds: number[]; message?: string }) =>
+    post('/teacher/homework/analysis/remind', data)
+}
+
+export const classEvaluationApi = {
+  getOverview: (params: { courseId: number; sessionDate?: string; weekNumber?: number }) =>
+    get('/teacher/class-evaluation/overview', params),
+  save: (data: any) => post('/teacher/class-evaluation/save', data),
+  importExcel: async (file: File, data: { courseId: number; termStartDate?: string }) => {
+    const userStoreJson = localStorage.getItem('smartedu_user')
+    let token = ''
+    if (userStoreJson) {
+      try {
+        const userStore = JSON.parse(userStoreJson)
+        token = userStore.token || ''
+      } catch (e) {
+        console.error('解析用户 store 失败:', e)
+      }
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('courseId', String(data.courseId))
+    if (data.termStartDate) {
+      formData.append('termStartDate', data.termStartDate)
+    }
+
+    const response = await fetch('/api/teacher/class-evaluation/import', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData
+    })
+    return response.json()
+  },
+  exportExcel: async (params: { courseId: number; sessionDate?: string; weekNumber?: number }) => {
+    const query = new URLSearchParams()
+    query.set('courseId', String(params.courseId))
+    if (params.sessionDate) {
+      query.set('sessionDate', params.sessionDate)
+    }
+    if (params.weekNumber != null) {
+      query.set('weekNumber', String(params.weekNumber))
+    }
+
+    const userStoreJson = localStorage.getItem('smartedu_user')
+    let token = ''
+    if (userStoreJson) {
+      try {
+        const userStore = JSON.parse(userStoreJson)
+        token = userStore.token || ''
+      } catch (e) {
+        console.error('解析用户 store 失败:', e)
+      }
+    }
+
+    const response = await fetch(`/api/teacher/class-evaluation/export?${query.toString()}`, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(text || '导出失败')
+    }
+
+    return response.blob()
+  }
+}
+
 // 教师备课相关
 export const lessonPrepApi = {
   // 推荐备课资源
@@ -164,17 +239,17 @@ export const lessonPrepApi = {
 export const analysisApi = {
   // 获取班级学情报告
   getClassReport: (courseId: number, params?: { homeworkId?: number; startDate?: string; endDate?: string }) =>
-    get(`/api/ai/analysis/class/${courseId}`, params),
+    get(`/ai/analysis/class/${courseId}`, params),
   // 获取学生个人报告
   getStudentReport: (studentId: number, courseId: number, reportType?: string) =>
-    get(`/api/ai/analysis/student/${studentId}`, { courseId, reportType }),
+    get(`/ai/analysis/student/${studentId}`, { courseId, reportType }),
   // 获取学习预警列表
   getWarnings: (courseId: number, warningType?: string) =>
-    get('/api/ai/analysis/warnings', { courseId, warningType }),
+    get('/ai/analysis/warnings', { courseId, warningType }),
   // 获取教学建议
   getTeachingSuggestion: (params: { homeworkId: number; courseId?: number }) =>
-    post('/api/ai/analysis/teaching-suggestion', params),
+    post('/ai/analysis/teaching-suggestion', params),
   // 获取知识点掌握图谱
   getKnowledgeMap: (studentId: number, courseId: number) =>
-    get(`/api/ai/analysis/knowledge-map/${studentId}`, { courseId })
+    get(`/ai/analysis/knowledge-map/${studentId}`, { courseId })
 }

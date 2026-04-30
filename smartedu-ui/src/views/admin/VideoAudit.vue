@@ -4,16 +4,25 @@
     <div class="page-header">
       <div class="header-left">
         <el-icon class="header-icon"><DocumentChecked /></el-icon>
-        <h2>视频审核</h2>
-        <el-tag type="warning" v-if="pendingCount > 0">{{ pendingCount }} 待审核</el-tag>
+        <h2>视频管理</h2>
+        <el-tag type="warning" v-if="activeTab === 'pending' && pendingCount > 0">{{ pendingCount }} 待审核</el-tag>
       </div>
-      <el-button @click="loadPendingVideos" :loading="loading">
+      <el-button @click="handleRefresh" :loading="loading">
         <el-icon><Refresh /></el-icon>
         刷新
       </el-button>
     </div>
 
-    <!-- 待审核列表 -->
+    <!-- 标签页切换 -->
+    <el-tabs v-model="activeTab" @tab-change="handleTabChange" class="video-tabs">
+      <el-tab-pane label="待审核" name="pending">
+        <template #label>
+          <span>待审核 <el-tag type="warning" size="small" v-if="pendingCount > 0">{{ pendingCount }}</el-tag></span>
+        </template>
+      </el-tab-pane>
+      <el-tab-pane label="已通过" name="approved"></el-tab-pane>
+    </el-tabs>
+
     <el-table :data="videoList" v-loading="loading" stripe style="width: 100%">
       <el-table-column label="封面" width="140">
         <template #default="{ row }">
@@ -44,16 +53,28 @@
           {{ row.createdAt }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
-          <el-button type="success" size="small" @click="handleApprove(row)">
-            <el-icon><Select /></el-icon>
-            通过
-          </el-button>
-          <el-button type="danger" size="small" @click="showRejectDialog(row)">
-            <el-icon><CloseBold /></el-icon>
-            拒绝
-          </el-button>
+          <template v-if="activeTab === 'pending'">
+            <el-button type="success" size="small" @click="handleApprove(row)">
+              <el-icon><Select /></el-icon>
+              通过
+            </el-button>
+            <el-button type="danger" size="small" @click="showRejectDialog(row)">
+              <el-icon><CloseBold /></el-icon>
+              拒绝
+            </el-button>
+            <el-button type="warning" size="small" @click="handleDelete(row)">
+              <el-icon><Delete /></el-icon>
+              删除
+            </el-button>
+          </template>
+          <template v-else>
+            <el-button type="danger" size="small" @click="handleDelete(row)">
+              <el-icon><Delete /></el-icon>
+              删除
+            </el-button>
+          </template>
         </template>
       </el-table-column>
     </el-table>
@@ -65,12 +86,12 @@
         :page-size="pageSize"
         :total="total"
         layout="total, prev, pager, next"
-        @current-change="loadPendingVideos"
+        @current-change="loadVideos"
       />
     </div>
 
     <!-- 空状态 -->
-    <el-empty v-if="!loading && videoList.length === 0" description="暂无待审核视频" />
+    <el-empty v-if="!loading && videoList.length === 0" :description="activeTab === 'pending' ? '暂无待审核视频' : '暂无已通过视频'" />
 
     <!-- 拒绝理由弹窗 -->
     <el-dialog
@@ -97,8 +118,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getPendingVideos, auditVideo } from '@/api/video'
-import { DocumentChecked, Refresh, VideoPlay, Link, Select, CloseBold } from '@element-plus/icons-vue'
+import { getPendingVideos, getApprovedVideos, auditVideo, deleteVideo } from '@/api/video'
+import { DocumentChecked, Refresh, VideoPlay, Link, Select, CloseBold, Delete } from '@element-plus/icons-vue'
+
+// 当前标签页：pending 待审核, approved 已通过
+const activeTab = ref('pending')
 
 interface VideoItem {
   id: number
@@ -149,6 +173,51 @@ const loadPendingVideos = async () => {
   }
 }
 
+// 加载已审核通过的视频
+const loadApprovedVideos = async () => {
+  loading.value = true
+  try {
+    const res = await getApprovedVideos({
+      page: currentPage.value,
+      size: pageSize.value
+    })
+    if (res.code === 200 && res.data) {
+      videoList.value = res.data.records || []
+      total.value = res.data.total || 0
+    } else {
+      videoList.value = []
+      total.value = 0
+    }
+  } catch (error) {
+    console.error('加载失败:', error)
+    videoList.value = []
+    total.value = 0
+  } finally {
+    loading.value = false
+  }
+}
+
+// 根据当前标签页加载对应数据
+const loadVideos = () => {
+  if (activeTab.value === 'pending') {
+    loadPendingVideos()
+  } else {
+    loadApprovedVideos()
+  }
+}
+
+// 刷新按钮
+const handleRefresh = () => {
+  currentPage.value = 1
+  loadVideos()
+}
+
+// 标签页切换
+const handleTabChange = () => {
+  currentPage.value = 1
+  loadVideos()
+}
+
 // 获取封面完整 URL
 const getCoverUrl = (url: string): string => {
   if (!url) return ''
@@ -171,7 +240,7 @@ const handleApprove = async (video: VideoItem) => {
     })
     if (res.code === 200) {
       ElMessage.success('审核通过')
-      loadPendingVideos()
+      loadVideos()
     } else {
       ElMessage.error(res.message || '操作失败')
     }
@@ -205,7 +274,7 @@ const handleReject = async () => {
     if (res.code === 200) {
       ElMessage.success('已拒绝')
       rejectDialogVisible.value = false
-      loadPendingVideos()
+      loadVideos()
     } else {
       ElMessage.error(res.message || '操作失败')
     }
@@ -216,8 +285,28 @@ const handleReject = async () => {
   }
 }
 
+// 删除视频
+const handleDelete = async (video: VideoItem) => {
+  try {
+    await ElMessageBox.confirm(`确定删除视频"${video.title}"吗？此操作不可恢复。`, '确认删除', {
+      type: 'warning'
+    })
+
+    const res = await deleteVideo(video.id)
+    if (res.code === 200) {
+      ElMessage.success('删除成功')
+      // 删除成功后重新加载当前列表
+      loadVideos()
+    } else {
+      ElMessage.error(res.message || '删除失败')
+    }
+  } catch (error) {
+    // 用户取消
+  }
+}
+
 onMounted(() => {
-  loadPendingVideos()
+  loadVideos()
 })
 </script>
 
@@ -272,5 +361,9 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 20px;
+}
+
+.video-tabs {
+  margin-bottom: 20px;
 }
 </style>
